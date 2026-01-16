@@ -1,0 +1,155 @@
+"""Helpers for reading user configuration into typed dataclasses."""
+
+from __future__ import annotations
+
+import logging
+import os
+from importlib import import_module
+from pathlib import Path
+from typing import Any, Type, TypeVar
+from collections.abc import Iterable, Mapping
+
+from compoconf import parse_config, ConfigInterface
+from hydra import compose, initialize_config_dir
+from omegaconf import OmegaConf
+
+from . import schema
+from .resolvers import register_default_resolvers
+
+LOGGER = logging.getLogger(__file__)
+
+T = TypeVar("T", bound=ConfigInterface)
+
+register_default_resolvers()
+
+
+class ConfigLoaderError(RuntimeError):
+    """Raised when the configuration file cannot be parsed."""
+
+
+def _load_yaml(path: str | Path) -> Mapping[str, Any]:
+    cfg = OmegaConf.load(path)
+    return OmegaConf.to_container(cfg, resolve=True)  # type: ignore[return-value]
+
+
+def load_config(path: str | Path, config_class: Type[T] = schema.StagedSweepRoot) -> T:
+    """Load and validate a configuration file into ``config_class``."""
+
+    path = Path(path)
+    if not path.exists():
+        raise ConfigLoaderError(f"Configuration file not found: {path}")
+
+    data = _load_yaml(path)
+    if not isinstance(data, Mapping):
+        raise ConfigLoaderError(f"Configuration root must be a mapping: {path}")
+
+    try:
+        root = parse_config(config_class, data)
+    except Exception as exc:  # pragma: no cover
+        raise ConfigLoaderError(f"Unable to parse config {path}: {exc}") from exc
+
+    if hasattr(root, "metadata") and isinstance(root.metadata, dict):
+        root.metadata.setdefault("config_ref", str(path))
+        root.metadata.setdefault("config_dir", str(path.parent))
+
+    return root
+
+
+def load_hydra_config(
+    config_name: str,
+    config_dir: str | Path,
+    overrides: Iterable[str] | None = None,
+    config_class: Type[T] = schema.StagedSweepRoot,
+) -> T:
+    LOGGER.info(f"Loading Hydra config: {config_name} from {config_dir}")
+    register_default_resolvers()
+
+    overrides = list(overrides or [])
+    if overrides:
+        LOGGER.debug(f"Applying {len(overrides)} overrides")
+    overrides = [
+        override.split("=")[0] + '="' + "=".join(override.split("=")[1:]) + '"' if "$" in override else override
+        for override in overrides
+    ]
+
+    config_dir = Path(config_dir).resolve()
+    if not config_dir.exists():
+        raise ConfigLoaderError(f"Hydra config directory not found: {config_dir}")
+
+    with initialize_config_dir(version_base=None, config_dir=str(config_dir)):
+        cfg = compose(config_name=config_name, overrides=overrides)
+
+    data = OmegaConf.to_container(cfg, resolve=True)  # type: ignore[return-value]
+    if not isinstance(data, Mapping):
+        raise ConfigLoaderError(f"Hydra config {config_name} did not produce a mapping")
+
+    try:
+        root = parse_config(config_class, data)
+    except Exception as exc:  # pragma: no cover
+        raise ConfigLoaderError(f"Unable to parse Hydra config {config_name}: {exc}") from exc
+
+    if hasattr(root, "metadata") and isinstance(root.metadata, dict):
+        root.metadata.setdefault("config_ref", str(config_name))
+        root.metadata.setdefault("config_dir", str(config_dir))
+
+    return root
+
+
+def load_config_reference(
+    config_name: str | None = None,
+    config_path: str | Path | None = None,
+    config_dir: str | Path | None = None,
+    overrides: Iterable[str] | None = None,
+    config_class: Type[T] = schema.StagedSweepRoot,
+) -> T:
+    if config_name is None and config_path:
+        path = Path(config_path)
+        if overrides:
+            config_reference_path = path.parent / "config_reference.json"
+            if config_reference_path.exists():
+                import json
+
+                try:
+                    reference_data = json.loads(config_reference_path.read_text(encoding="utf-8"))
+                    original_config_ref = reference_data.get("config_ref")
+                    original_config_dir = reference_data.get("config_dir")
+                    original_overrides = reference_data.get("overrides", [])
+
+                    combined_overrides = list(original_overrides) + list(overrides)
+
+                    return load_hydra_config(
+                        original_config_ref,
+                        original_config_dir or config_dir,
+                        combined_overrides,
+                        config_class=config_class,
+                    )
+                except Exception as exc:
+                    print(f"Warning: Could not load config_reference.json, falling back to OmegaConf: {exc}")
+
+            with initialize_config_dir(version_base=None, config_dir=os.path.abspath(path.parent)):
+                cfg = compose(config_name=path.name[:-5], overrides=overrides)
+
+            data = OmegaConf.to_container(cfg, resolve=True)
+            if not isinstance(data, Mapping):
+                raise ConfigLoaderError(f"Config file {path} did not produce a mapping")
+
+            try:
+                root = parse_config(config_class, data)
+            except Exception as exc:
+                raise ConfigLoaderError(f"Unable to parse config {path}: {exc}") from exc
+
+            if hasattr(root, "metadata") and isinstance(root.metadata, dict):
+                root.metadata.setdefault("config_ref", str(path))
+                root.metadata.setdefault("config_dir", str(path.parent))
+            return root
+        else:
+            return load_config(path, config_class=config_class)
+    return load_hydra_config(config_name, config_dir, overrides, config_class=config_class)
+
+
+__all__ = [
+    "ConfigLoaderError",
+    "load_config",
+    "load_hydra_config",
+    "load_config_reference",
+]
