@@ -6,49 +6,6 @@ from hydra_staged_sweep.config.schema import SweepConfig
 from omegaconf import DictConfig
 
 
-def test_expand_sweep_with_filter():
-    """Test sweep expansion with filter."""
-    config = SweepConfig(
-        type="product",
-        groups=[
-            {
-                "type": "product",
-                "params": {
-                    "learning_rate": [0.001, 0.01],
-                    "batch_size": [32, 64],
-                },
-            }
-        ],
-        filter="learning_rate < 0.005 and batch_size == 32",
-    )
-
-    points = expand_sweep(config)
-
-    # Only one combination should pass the filter
-    assert len(points) == 1
-    assert points[0].parameters["learning_rate"] == 0.001
-    assert points[0].parameters["batch_size"] == 32
-
-
-def test_expand_sweep_with_invalid_filter():
-    """Test sweep expansion with invalid filter that raises exception."""
-    config = SweepConfig(
-        type="product",
-        groups=[
-            {
-                "type": "product",
-                "params": {
-                    "value": [1, 2],
-                },
-            }
-        ],
-        filter="undefined_variable > 0",  # Will cause NameError
-    )
-
-    with pytest.raises(ValueError, match="Error evaluating sweep filter"):
-        expand_sweep(config)
-
-
 def test_expand_group_with_empty_groups():
     """Test _expand_group with empty groups list."""
     from hydra_staged_sweep.expander import _expand_group

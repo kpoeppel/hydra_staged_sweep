@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Type, TypeVar
 from collections.abc import Iterable, Mapping
@@ -32,6 +31,24 @@ def _load_yaml(path: str | Path) -> Mapping[str, Any]:
     return OmegaConf.to_container(cfg, resolve=True)  # type: ignore[return-value]
 
 
+def _set_metadata(root: ConfigInterface, config_ref: str | None, config_dir: str | None) -> None:
+    if hasattr(root, "metadata") and isinstance(root.metadata, dict):
+        if config_ref is not None:
+            root.metadata.setdefault("config_ref", str(config_ref))
+        if config_dir is not None:
+            root.metadata.setdefault("config_dir", str(config_dir))
+
+
+def _parse_root(data: Mapping[str, Any], config_class: Type[T], config_ref: str | None, config_dir: str | None) -> T:
+    try:
+        root = parse_config(config_class, data)
+    except Exception as exc:  # pragma: no cover
+        raise ConfigLoaderError(f"Unable to parse config {config_ref or config_dir}: {exc}") from exc
+
+    _set_metadata(root, config_ref, config_dir)
+    return root
+
+
 def load_config(path: str | Path, config_class: Type[T] = schema.StagedSweepRoot) -> T:
     """Load and validate a configuration file into ``config_class``."""
 
@@ -43,16 +60,7 @@ def load_config(path: str | Path, config_class: Type[T] = schema.StagedSweepRoot
     if not isinstance(data, Mapping):
         raise ConfigLoaderError(f"Configuration root must be a mapping: {path}")
 
-    try:
-        root = parse_config(config_class, data)
-    except Exception as exc:  # pragma: no cover
-        raise ConfigLoaderError(f"Unable to parse config {path}: {exc}") from exc
-
-    if hasattr(root, "metadata") and isinstance(root.metadata, dict):
-        root.metadata.setdefault("config_ref", str(path))
-        root.metadata.setdefault("config_dir", str(path.parent))
-
-    return root
+    return _parse_root(data, config_class, str(path), str(path.parent))
 
 
 def load_hydra_config(
@@ -83,16 +91,7 @@ def load_hydra_config(
     if not isinstance(data, Mapping):
         raise ConfigLoaderError(f"Hydra config {config_name} did not produce a mapping")
 
-    try:
-        root = parse_config(config_class, data)
-    except Exception as exc:  # pragma: no cover
-        raise ConfigLoaderError(f"Unable to parse Hydra config {config_name}: {exc}") from exc
-
-    if hasattr(root, "metadata") and isinstance(root.metadata, dict):
-        root.metadata.setdefault("config_ref", str(config_name))
-        root.metadata.setdefault("config_dir", str(config_dir))
-
-    return root
+    return _parse_root(data, config_class, str(config_name), str(config_dir))
 
 
 def load_config_reference(
@@ -124,7 +123,10 @@ def load_config_reference(
                         config_class=config_class,
                     )
                 except Exception as exc:
-                    print(f"Warning: Could not load config_reference.json, falling back to OmegaConf: {exc}")
+                    LOGGER.warning(
+                        "Could not load config_reference.json, falling back to OmegaConf: %s",
+                        exc,
+                    )
 
             with initialize_config_dir(version_base=None, config_dir=os.path.abspath(path.parent)):
                 cfg = compose(config_name=path.name[:-5], overrides=overrides)
@@ -133,15 +135,7 @@ def load_config_reference(
             if not isinstance(data, Mapping):
                 raise ConfigLoaderError(f"Config file {path} did not produce a mapping")
 
-            try:
-                root = parse_config(config_class, data)
-            except Exception as exc:
-                raise ConfigLoaderError(f"Unable to parse config {path}: {exc}") from exc
-
-            if hasattr(root, "metadata") and isinstance(root.metadata, dict):
-                root.metadata.setdefault("config_ref", str(path))
-                root.metadata.setdefault("config_dir", str(path.parent))
-            return root
+            return _parse_root(data, config_class, str(path), str(path.parent))
         else:
             return load_config(path, config_class=config_class)
     return load_hydra_config(config_name, config_dir, overrides, config_class=config_class)

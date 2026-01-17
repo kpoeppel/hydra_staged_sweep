@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from functools import lru_cache
 from math import sqrt as _sqrt
 from collections.abc import Mapping
@@ -14,6 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 _REGISTRATION_SENTINEL = {"registered": False}
+_FORBIDDEN_EVAL_TOKENS = ("import", "open(", "input(")
 
 
 def _safe_mul(*args):
@@ -138,7 +139,7 @@ def _dict_merge(*mappings):
 
 @lru_cache
 def _timestring():
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")[:-3]
 
 
 def oc_if(a: str | int | bool, b: str, c: str):
@@ -146,6 +147,17 @@ def oc_if(a: str | int | bool, b: str, c: str):
         return c
     else:
         return b
+
+
+def _validate_eval_expression(expr: str) -> None:
+    normalized = expr.replace(" ", "")
+    if any(token in normalized for token in _FORBIDDEN_EVAL_TOKENS):
+        raise ValueError("oc.eval contains blocked token (import/open/input).")
+
+
+def _safe_eval(expr: str):
+    _validate_eval_expression(expr)
+    return eval(expr)
 
 
 def register_default_resolvers(force: bool = False) -> None:
@@ -171,7 +183,7 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.dict_merge", _dict_merge, replace=True)
     OmegaConf.register_new_resolver("oc.timestring", lambda: _timestring(), replace=True)
     OmegaConf.register_new_resolver("oc.len", len, replace=True)
-    OmegaConf.register_new_resolver("oc.eval", eval, replace=True)  # noqa: S307
+    OmegaConf.register_new_resolver("oc.eval", _safe_eval, replace=True)  # noqa: S307
     OmegaConf.register_new_resolver("oc.if", oc_if, replace=True)
 
     _REGISTRATION_SENTINEL["registered"] = True

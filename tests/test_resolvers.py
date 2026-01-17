@@ -133,3 +133,14 @@ def test_len():
 def test_eval():
     c = OmegaConf.create({"val": "${oc.eval:1+1}"})
     assert c.val == 2
+
+
+def test_eval_blocked_tokens():
+    with pytest.raises(ValueError, match="blocked token"):
+        OmegaConf.create({"val": "${oc.eval:'import os'}"}).val
+
+    with pytest.raises(ValueError, match="blocked token"):
+        OmegaConf.create({"val": "${oc.eval:'open(1)'}"}).val
+
+    with pytest.raises(ValueError, match="blocked token"):
+        OmegaConf.create({"val": "${oc.eval:'input(1)'}"}).val

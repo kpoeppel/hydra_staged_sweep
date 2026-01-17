@@ -33,6 +33,9 @@ sweep:
       params:
         learning_rate: [1.0e-4, 5.0e-4]
         batch_size: [32, 64]
+  # Filter runs after full resolution; must resolve to a bool.
+  # Use escaped interpolation so it is evaluated after overrides are applied.
+  filter: "\\${oc.eval:'\\${learning_rate} < 0.001 and \\${batch_size} == 32'}"
     
     # 2. Stages (Sequential)
     - type: "list"
@@ -43,6 +46,7 @@ sweep:
         - stage: "decay"
           train_iters: 200
           # Reference the 'stable' stage of the *same* hyperparameter combination
+          # Sibling interpolation must be escaped in the original config.
           load_path: "\\${sibling.stable.project.base_output_dir}/checkpoints" 
 ```
 
@@ -114,3 +118,9 @@ Run the tests using `pytest`:
 ```bash
 PYTHONPATH=src pytest tests/
 ```
+
+## Security Note
+
+Sibling interpolation must be escaped in the original config because siblings are not available until after the first resolution pass.
+
+This library uses `eval` for the `oc.eval` resolver. For safety, expressions are rejected if they contain `import`, `open(`, or `input(`. Keep untrusted input out of these fields. `sweep.filter` is resolved after each job configuration is composed, so it must resolve to a boolean (use escaped interpolations like `\\${oc.eval:...}` or other resolvers).

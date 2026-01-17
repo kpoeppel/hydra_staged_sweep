@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from itertools import zip_longest
 from typing import Any, Type
 
 import networkx as nx
 from compoconf import asdict
-from omegaconf import DictConfig, ListConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
 from hydra_staged_sweep.config.loader import load_config_reference
@@ -26,6 +29,14 @@ from hydra_staged_sweep.expander import SweepPoint
 from hydra_staged_sweep.planner import JobPlan
 
 LOGGER = logging.getLogger(__file__)
+
+
+@dataclass(frozen=True)
+class SiblingIndex:
+    patterns_by_idx: dict[int, set[str]]
+    match_key_by_idx: dict[int, tuple[int, ...]]
+    index_by_key: dict[tuple[int, ...], list[int]]
+    stage_mask: tuple[bool, ...]
 
 
 def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
@@ -49,26 +60,86 @@ def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
     return patterns
 
 
+def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ...]:
+    """Build a matching key that ignores globally stage-flagged path segments."""
+    return tuple(
+        group_idx
+        for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False)
+        if not is_stage
+    )
+
+
+def _build_sibling_index(points: Mapping[int, SweepPoint]) -> SiblingIndex:
+    patterns_by_idx: dict[int, set[str]] = {}
+    match_key_by_idx: dict[int, tuple[int, ...]] = {}
+    index_by_key: dict[tuple[int, ...], list[int]] = defaultdict(list)
+    max_depth = 0
+
+    for point in points.values():
+        max_depth = max(max_depth, len(point.group_path), len(point.stage_path))
+
+    stage_mask = [False] * max_depth
+    for point in points.values():
+        for idx, is_stage in enumerate(point.stage_path):
+            if is_stage:
+                stage_mask[idx] = True
+    stage_mask_tuple = tuple(stage_mask)
+
+    for idx, point in points.items():
+        patterns_by_idx[idx] = extract_sibling_patterns(point.parameters)
+        match_key = _match_key(point, stage_mask_tuple)
+        match_key_by_idx[idx] = match_key
+        index_by_key[match_key].append(idx)
+
+    return SiblingIndex(
+        patterns_by_idx=patterns_by_idx,
+        match_key_by_idx=match_key_by_idx,
+        index_by_key=dict(index_by_key),
+        stage_mask=stage_mask_tuple,
+    )
+
+
+def _resolve_filter_from_context(filter_expr: Any, context: Mapping[str, Any]) -> bool:
+    if isinstance(filter_expr, bool):
+        return filter_expr
+    if not isinstance(filter_expr, str):
+        raise ValueError("sweep.filter must resolve to a bool.")
+    cfg = OmegaConf.create({**context, "sweep": {"filter": filter_expr}})
+    resolved = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(resolved, dict):
+        raise ValueError("sweep.filter must resolve to a bool.")
+    result = resolved.get("sweep", {}).get("filter")
+    if not isinstance(result, bool):
+        raise ValueError("sweep.filter must resolve to a bool.")
+    return result
+
+
 def find_sibling_by_group_path(
-    point: SweepPoint, all_points: list[SweepPoint], stage_pattern: str
+    point: SweepPoint,
+    all_points: Mapping[int, SweepPoint] | list[SweepPoint],
+    stage_pattern: str,
+    sibling_index: SiblingIndex | None = None,
 ) -> SweepPoint | None:
     """Find sibling with matching hyperparameters."""
-    own_stage: str | None = point.parameters.get("stage")
-    if not extract_sibling_patterns(point.parameters):
+    points_dict = all_points if isinstance(all_points, Mapping) else {p.index: p for p in all_points}
+    index = sibling_index or _build_sibling_index(points_dict)
+
+    if not index.patterns_by_idx.get(point.index):
         return None
 
     siblings = []
-    point_filtered = list(zip(point.group_path, point.stage_path))
+    point_key = index.match_key_by_idx.get(point.index, ())
 
-    for potential_sibling in all_points.values():
-        sibling_filtered = list(zip(potential_sibling.group_path, potential_sibling.stage_path))
-        if (
-            all((gp == gs) or sp or ss for ((gp, sp), (gs, ss)) in zip(point_filtered, sibling_filtered))
-            and point.group_path != potential_sibling.group_path
-        ):
-            siblings.append(potential_sibling)
+    for candidate_idx in index.index_by_key.get(point_key, []):
+        if candidate_idx == point.index:
+            continue
+        siblings.append(points_dict[candidate_idx])
 
-    LOGGER.debug(f"Got siblings for own stage {own_stage}: {[s.parameters.get('stage', '') for s in siblings]}")
+    LOGGER.debug(
+        "Got siblings for point %s: %s",
+        point.index,
+        [s.parameters.get("stage", "") for s in siblings],
+    )
     matched_sibling = [sibling for sibling in siblings if re.match(stage_pattern, sibling.parameters.get("stage", ""))]
     if matched_sibling:
         if len(matched_sibling) > 1:
@@ -77,21 +148,25 @@ def find_sibling_by_group_path(
     return None
 
 
-def build_dependency_dag_from_points(points: dict[int, SweepPoint]) -> nx.DiGraph:
+def build_dependency_dag_from_points(
+    points: dict[int, SweepPoint],
+    sibling_index: SiblingIndex | None = None,
+) -> nx.DiGraph:
     """Build dependency DAG from sweep points."""
     LOGGER.debug(f"Building dependency DAG from {len(points)} points")
     dag = nx.DiGraph()
+    index = sibling_index or _build_sibling_index(points)
 
     for point in points.values():
         dag.add_node(point.index)
 
     edges_added = 0
     for point in points.values():
-        sibling_deps = extract_sibling_patterns(point.parameters)
+        sibling_deps = index.patterns_by_idx.get(point.index, set())
 
         for stage_pattern in sibling_deps:
             try:
-                sibling = find_sibling_by_group_path(point, points, stage_pattern)
+                sibling = find_sibling_by_group_path(point, points, stage_pattern, sibling_index=index)
                 if sibling:
                     dag.add_edge(sibling.index, point.index)
                 else:
@@ -157,7 +232,8 @@ def resolve_sweep_with_dag(
     else:
         points_dict = points
 
-    dag = build_dependency_dag_from_points(points_dict)
+    sibling_index = _build_sibling_index(points_dict)
+    dag = build_dependency_dag_from_points(points_dict, sibling_index=sibling_index)
 
     if not nx.is_directed_acyclic_graph(dag):
         cycles = list(nx.simple_cycles(dag))
@@ -168,13 +244,25 @@ def resolve_sweep_with_dag(
     LOGGER.debug(f"Topological order: {ordered_indices}")
 
     resolved_jobs = {}
+    base_context = asdict(config)
+    base_context = {k: v for k, v in base_context.items() if k not in ("sweep", "sibling")}
+    sweep_filter_expr = getattr(getattr(config, "sweep", None), "filter", None)
 
     for point_idx in ordered_indices:
         point = points_dict[point_idx]
-        sibling_patterns = extract_sibling_patterns(point.parameters)
+        if sweep_filter_expr is not None:
+            context = dict(base_context)
+            for key, value in point.parameters.items():
+                if isinstance(value, str) and "${sibling." in value:
+                    continue
+                context[key] = value
+            if not _resolve_filter_from_context(sweep_filter_expr, context):
+                LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+                continue
+        sibling_patterns = sibling_index.patterns_by_idx.get(point_idx, set())
         sibling_jobs = {}
         for pattern in sibling_patterns:
-            sibling_point = find_sibling_by_group_path(point, points_dict, pattern)
+            sibling_point = find_sibling_by_group_path(point, points_dict, pattern, sibling_index=sibling_index)
             if sibling_point and sibling_point.index in resolved_jobs:
                 sibling_jobs[pattern] = resolved_jobs[sibling_point.index]
 
@@ -221,6 +309,25 @@ def resolve_sweep_with_dag(
             overrides=job_parameters,
             config_class=config_class,
         )
+
+        sweep_filter = getattr(getattr(resolved, "sweep", None), "filter", None)
+        if sweep_filter is not None:
+            if not isinstance(sweep_filter, bool) and isinstance(sweep_filter, str):
+                try:
+                    resolved_dict = asdict(resolved)
+                    filter_context = {k: v for k, v in resolved_dict.items() if k not in ("sweep", "sibling")}
+                    filter_context["sweep"] = {"filter": sweep_filter}
+                    resolved_data = OmegaConf.to_container(OmegaConf.create(filter_context), resolve=True)
+                    if isinstance(resolved_data, dict):
+                        sweep_filter = resolved_data.get("sweep", {}).get("filter", sweep_filter)
+                except Exception as exc:
+                    raise ValueError(f"sweep.filter must resolve to a bool: {exc}") from exc
+
+            if not isinstance(sweep_filter, bool):
+                raise ValueError("sweep.filter must resolve to a bool.")
+            if not sweep_filter:
+                LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+                continue
 
         stage_name = getattr(resolved, "stage", None)
 

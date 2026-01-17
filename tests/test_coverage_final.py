@@ -20,7 +20,7 @@ from hydra_staged_sweep.dag_resolver import (
 from hydra_staged_sweep.expander import SweepPoint
 
 
-def test_config_reference_json_exception(capfd):
+def test_config_reference_json_exception(caplog):
     """Cover lines 242-243: exception when loading config_reference.json.
 
     This test triggers the fallback path when config_reference.json exists
@@ -41,11 +41,10 @@ def test_config_reference_json_exception(capfd):
             overrides=["sweep.type=list"],
             config_class=StagedSweepRoot,
         )
-
-        # Verify the warning was printed
-        captured = capfd.readouterr()
-        assert "Warning: Could not load config_reference.json" in captured.out
         assert result is not None
+
+    # Verify the warning was logged
+    assert "Could not load config_reference.json" in caplog.text
 
 
 def test_parse_config_exception():

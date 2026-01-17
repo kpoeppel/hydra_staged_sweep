@@ -46,6 +46,22 @@ def expand_sweep(config: SweepConfig) -> list[SweepPoint]:
     return points
 
 
+def _has_stage_key(values: Mapping[str, Any], stage_str: str) -> bool:
+    return stage_str in values
+
+
+def _nested_has_stage_key(config_dict: Mapping[str, Any], stage_str: str) -> bool:
+    for key in ("groups", "params", "configs"):
+        value = config_dict.get(key)
+        if isinstance(value, Mapping) and stage_str in value:
+            return True
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, Mapping) and stage_str in item:
+                    return True
+    return False
+
+
 def _expand_composable_sweep(config: SweepConfig, base_values: dict[str, Any]) -> list[SweepPoint]:
     """New composable groups expansion with product/list modes."""
     groups = config.groups or []
@@ -60,17 +76,6 @@ def _expand_composable_sweep(config: SweepConfig, base_values: dict[str, Any]) -
         group_path=(),
         stage_path=(),
     )
-
-    # Apply filter if specified
-    if config.filter:
-        filtered = []
-        for params, path, stage_path in group_combinations:
-            try:
-                if eval(config.filter, {}, params):
-                    filtered.append((params, path, stage_path))
-            except Exception as e:
-                raise ValueError(f"Error evaluating sweep filter '{config.filter}': {e}")
-        group_combinations = filtered
 
     # Create SweepPoints with indices
     points = [
@@ -140,7 +145,7 @@ def _expand_group(
                 full_params.update(combo)
                 # Include combo_idx in group_path to distinguish different parameter combinations
                 combinations.append((full_params, current_path + (combo_idx,)))
-            if any(stage_str in list(comb[0]) for comb in combinations):
+            if any(_has_stage_key(comb[0], stage_str) for comb in combinations):
                 combinations = [
                     (
                         *comb,
@@ -166,13 +171,7 @@ def _expand_group(
                 if isinstance(config_dict, dict) and (
                     "groups" in config_dict or "params" in config_dict or "configs" in config_dict
                 ):
-                    if stage_str in sum(
-                        [list(config_dict.get(key, [])) for key in ["groups", "params", "configs"]],
-                        start=[],
-                    ):
-                        stage_idx = True
-                    else:
-                        stage_idx = False
+                    stage_idx = _nested_has_stage_key(config_dict, stage_str)
                     # Nested group - recursively expand
                     # Wrap as a single-element group list to process correctly
                     nested_combos = _expand_group(
@@ -192,10 +191,7 @@ def _expand_group(
                     # Simple config dict
                     full_params = dict(group_base_values)
                     full_params.update(config_dict)
-                    if stage_str in list(full_params):
-                        stage_idx = True
-                    else:
-                        stage_idx = False
+                    stage_idx = _has_stage_key(full_params, stage_str)
                     combinations.append(
                         (
                             full_params,
@@ -230,8 +226,8 @@ def _expand_group(
 
 
 def _cartesian_product_groups(
-    groups: list[list[tuple[dict[str, Any], tuple[int, ...]]]],
-) -> list[tuple[dict[str, Any], tuple[int, ...]]]:
+    groups: list[list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]]],
+) -> list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]]:
     """Compute cartesian product of parameter groups.
 
     Merges parameters from each group and combines group paths.

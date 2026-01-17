@@ -5,6 +5,7 @@ from hydra_staged_sweep.dag_resolver import (
     find_sibling_by_group_path,
     build_dependency_dag_from_points,
     resolve_sweep_with_dag,
+    _resolve_filter_from_context,
 )
 from hydra_staged_sweep.expander import SweepPoint
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
@@ -116,3 +117,25 @@ def test_resolve_sweep_handles_value_error_in_sibling_resolution():
     # This test documents that lines 234-235 handle ValueError
     # when finding sibling points fails
     pass
+
+
+def test_resolve_filter_from_context_invalid_type():
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
+        _resolve_filter_from_context(123, {})
+
+
+def test_resolve_filter_from_context_non_bool_result():
+    from hydra_staged_sweep.config.resolvers import register_default_resolvers
+
+    register_default_resolvers(force=True)
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
+        _resolve_filter_from_context("${oc.eval:'1'}", {})
+
+
+def test_resolve_filter_from_context_non_dict(monkeypatch):
+    def fake_to_container(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr("hydra_staged_sweep.dag_resolver.OmegaConf.to_container", fake_to_container)
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
+        _resolve_filter_from_context("${oc.eval:'True'}", {})

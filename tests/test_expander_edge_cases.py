@@ -37,15 +37,6 @@ def test_expand_group_error():
     with pytest.raises(ValueError, match="Group must have 'groups', 'params', or 'configs'"):
         expand_sweep(config)
 
-def test_expand_filter_error():
-    config = SweepConfig(
-        type="product",
-        groups=[{"params": {"a": [1]}}],
-        filter="invalid syntax !!!"
-    )
-    with pytest.raises(ValueError, match="Error evaluating sweep filter"):
-        expand_sweep(config)
-
 def test_expand_no_groups_defined():
     config = SweepConfig(type=None, groups=None)
     points = expand_sweep(config)
@@ -77,3 +68,4 @@ def test_cartesian_product_groups_logic():
     )
     points = expand_sweep(config)
     assert len(points) == 4
+
