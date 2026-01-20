@@ -105,13 +105,64 @@ def _resolve_filter_from_context(filter_expr: Any, context: Mapping[str, Any]) -
     if not isinstance(filter_expr, str):
         raise ValueError("sweep.filter must resolve to a bool.")
     cfg = OmegaConf.create({**context, "sweep": {"filter": filter_expr}})
-    resolved = OmegaConf.to_container(cfg, resolve=True)
+    try:
+        resolved = OmegaConf.to_container(cfg, resolve=True)
+    except Exception as exc:
+        raise ValueError(f"sweep.filter must resolve to a bool: {exc}") from exc
     if not isinstance(resolved, dict):
         raise ValueError("sweep.filter must resolve to a bool.")
     result = resolved.get("sweep", {}).get("filter")
     if not isinstance(result, bool):
         raise ValueError("sweep.filter must resolve to a bool.")
     return result
+
+
+def _collect_group_filters(groups: list[dict[str, Any]] | None, group_path: tuple[int, ...]) -> list[Any]:
+    if not groups:
+        return []
+
+    filters: list[Any] = []
+    cursor = 0
+
+    def walk(group_list: list[dict[str, Any]]) -> None:
+        nonlocal cursor, filters
+        for group_idx, group in enumerate(group_list):
+            if cursor >= len(group_path):
+                raise ValueError("Group path does not match sweep groups.")
+            if group_path[cursor] != group_idx:
+                raise ValueError("Group path does not match sweep groups.")
+            cursor += 1
+
+            group_type = group.get("type", "product")
+            if group_type == "product" and "filter" in group:
+                filters.append(group.get("filter"))
+
+            if "groups" in group:
+                walk(group["groups"])
+            elif "params" in group:
+                if cursor >= len(group_path):
+                    raise ValueError("Group path does not match sweep groups.")
+                cursor += 1
+            elif "configs" in group:
+                if cursor >= len(group_path):
+                    raise ValueError("Group path does not match sweep groups.")
+                config_idx = group_path[cursor]
+                cursor += 1
+                configs = group["configs"]
+                if not isinstance(configs, list) or config_idx >= len(configs):
+                    raise ValueError("Group path does not match sweep groups.")
+                config_dict = configs[config_idx]
+                if isinstance(config_dict, dict) and (
+                    "groups" in config_dict or "params" in config_dict or "configs" in config_dict
+                ):
+                    walk([config_dict])
+            else:
+                raise ValueError("Group must have 'groups', 'params', or 'configs'.")
+
+    walk(groups)
+    if cursor != len(group_path):
+        raise ValueError("Group path does not match sweep groups.")
+    return filters
 
 
 def find_sibling_by_group_path(
@@ -246,19 +297,37 @@ def resolve_sweep_with_dag(
     resolved_jobs = {}
     base_context = asdict(config)
     base_context = {k: v for k, v in base_context.items() if k not in ("sweep", "sibling")}
-    sweep_filter_expr = getattr(getattr(config, "sweep", None), "filter", None)
+    sweep_filter_expr = config.sweep.filter
 
     for point_idx in ordered_indices:
         point = points_dict[point_idx]
-        if sweep_filter_expr is not None:
+        try:
+            group_filters = _collect_group_filters(config.sweep.groups, point.group_path)
+        except ValueError as exc:
+            raise ValueError(f"Unable to match group_path for filtering: {exc}") from exc
+
+        filter_exprs = [sweep_filter_expr, *group_filters]
+        unresolved_filters: list[Any] = []
+        if any(expr is not None for expr in filter_exprs):
             context = dict(base_context)
             for key, value in point.parameters.items():
                 if isinstance(value, str) and "${sibling." in value:
                     continue
                 context[key] = value
-            if not _resolve_filter_from_context(sweep_filter_expr, context):
-                LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+            skip_point = False
+            for expr in filter_exprs:
+                if expr is None:
+                    continue
+                try:
+                    if not _resolve_filter_from_context(expr, context):
+                        LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+                        skip_point = True
+                        break
+                except ValueError:
+                    unresolved_filters.append(expr)
+            if skip_point:
                 continue
+
         sibling_patterns = sibling_index.patterns_by_idx.get(point_idx, set())
         sibling_jobs = {}
         for pattern in sibling_patterns:
@@ -310,23 +379,16 @@ def resolve_sweep_with_dag(
             config_class=config_class,
         )
 
-        sweep_filter = getattr(getattr(resolved, "sweep", None), "filter", None)
-        if sweep_filter is not None:
-            if not isinstance(sweep_filter, bool) and isinstance(sweep_filter, str):
-                try:
-                    resolved_dict = asdict(resolved)
-                    filter_context = {k: v for k, v in resolved_dict.items() if k not in ("sweep", "sibling")}
-                    filter_context["sweep"] = {"filter": sweep_filter}
-                    resolved_data = OmegaConf.to_container(OmegaConf.create(filter_context), resolve=True)
-                    if isinstance(resolved_data, dict):
-                        sweep_filter = resolved_data.get("sweep", {}).get("filter", sweep_filter)
-                except Exception as exc:
-                    raise ValueError(f"sweep.filter must resolve to a bool: {exc}") from exc
-
-            if not isinstance(sweep_filter, bool):
-                raise ValueError("sweep.filter must resolve to a bool.")
-            if not sweep_filter:
-                LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+        if unresolved_filters:
+            resolved_dict = asdict(resolved)
+            context = {k: v for k, v in resolved_dict.items() if k not in ("sweep", "sibling")}
+            skip_point = False
+            for expr in unresolved_filters:
+                if not _resolve_filter_from_context(expr, context):
+                    LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+                    skip_point = True
+                    break
+            if skip_point:
                 continue
 
         stage_name = getattr(resolved, "stage", None)

@@ -78,6 +78,34 @@ def test_load_hydra_config_with_interpolation_override(tmp_path):
     assert res.stage == "val"
 
 
+def test_load_hydra_config_multiple_defaults_merge(tmp_path):
+    config_dir = tmp_path / "conf"
+    config_dir.mkdir()
+    (config_dir / "base.yaml").write_text(
+        textwrap.dedent(
+            """
+            defaults:
+              - setup: setup1
+              - _self_
+            """
+        ).strip()
+        + "\n"
+    )
+    setup_dir = config_dir / "setup"
+    setup_dir.mkdir()
+    (setup_dir / "setup1.yaml").write_text("mode: first\nalpha: 1\n")
+    (setup_dir / "setup2.yaml").write_text("mode: second\nbeta: 2\n")
+
+    @dataclass(kw_only=True)
+    class DefaultsConfig(StagedSweepRoot):
+        setup: dict[str, Any] = field(default_factory=dict)
+
+    res = load_hydra_config("base", config_dir, overrides=["setup=[setup1,setup2]"], config_class=DefaultsConfig)
+    assert res.setup["mode"] == "second"
+    assert res.setup["alpha"] == 1
+    assert res.setup["beta"] == 2
+
+
 def test_load_config_reference_not_mapping(tmp_path):
     config_dir = tmp_path / "conf"
     config_dir.mkdir()

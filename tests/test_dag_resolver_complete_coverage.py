@@ -6,6 +6,7 @@ from hydra_staged_sweep.dag_resolver import (
     build_dependency_dag_from_points,
     resolve_sweep_with_dag,
     _resolve_filter_from_context,
+    _collect_group_filters,
 )
 from hydra_staged_sweep.expander import SweepPoint
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
@@ -139,3 +140,73 @@ def test_resolve_filter_from_context_non_dict(monkeypatch):
     monkeypatch.setattr("hydra_staged_sweep.dag_resolver.OmegaConf.to_container", fake_to_container)
     with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
         _resolve_filter_from_context("${oc.eval:'True'}", {})
+
+
+def test_collect_group_filters_none():
+    assert _collect_group_filters(None, ()) == []
+
+
+def test_collect_group_filters_simple_product():
+    groups = [
+        {"type": "product", "params": {"a": [1, 2]}, "filter": True},
+    ]
+    assert _collect_group_filters(groups, (0, 1)) == [True]
+
+
+def test_collect_group_filters_nested_configs():
+    groups = [
+        {
+            "type": "list",
+            "configs": [
+                {"type": "product", "params": {"a": [1]}, "filter": "f1"},
+            ],
+        }
+    ]
+    assert _collect_group_filters(groups, (0, 0, 0, 0)) == ["f1"]
+
+
+def test_collect_group_filters_nested_groups():
+    groups = [{"type": "product", "groups": [{"type": "product", "params": {"a": [1]}, "filter": "f2"}]}]
+    assert _collect_group_filters(groups, (0, 0, 0)) == ["f2"]
+
+
+def test_collect_group_filters_mismatch_raises():
+    groups = [{"type": "product", "params": {"a": [1]}}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, (1, 0))
+
+
+def test_collect_group_filters_short_path_raises():
+    groups = [{"type": "product", "params": {"a": [1]}}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, ())
+
+
+def test_collect_group_filters_params_missing_index():
+    groups = [{"type": "product", "params": {"a": [1]}}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, (0,))
+
+
+def test_collect_group_filters_configs_missing_index():
+    groups = [{"type": "list", "configs": [{"a": 1}]}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, (0,))
+
+
+def test_collect_group_filters_configs_out_of_range():
+    groups = [{"type": "list", "configs": [{"a": 1}]}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, (0, 2))
+
+
+def test_collect_group_filters_invalid_group():
+    groups = [{"type": "product", "invalid": True}]
+    with pytest.raises(ValueError, match="Group must have 'groups', 'params', or 'configs'"):
+        _collect_group_filters(groups, (0,))
+
+
+def test_collect_group_filters_extra_path():
+    groups = [{"type": "product", "params": {"a": [1]}}]
+    with pytest.raises(ValueError, match="Group path does not match sweep groups"):
+        _collect_group_filters(groups, (0, 0, 1))

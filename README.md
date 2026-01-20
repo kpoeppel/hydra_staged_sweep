@@ -33,6 +33,8 @@ sweep:
       params:
         learning_rate: [1.0e-4, 5.0e-4]
         batch_size: [32, 64]
+      # Group-level filter (applies only to this group path)
+      filter: "\\${oc.eval:'\\${batch_size} == 32'}"
   # Filter runs after full resolution; must resolve to a bool.
   # Use escaped interpolation so it is evaluated after overrides are applied.
   filter: "\\${oc.eval:'\\${learning_rate} < 0.001 and \\${batch_size} == 32'}"
