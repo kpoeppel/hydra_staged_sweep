@@ -63,9 +63,7 @@ def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
 def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ...]:
     """Build a matching key that ignores globally stage-flagged path segments."""
     return tuple(
-        group_idx
-        for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False)
-        if not is_stage
+        group_idx for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False) if not is_stage
     )
 
 
@@ -341,7 +339,7 @@ def resolve_sweep_with_dag(
                     config_dir=config_setup.config_dir,
                     config_path=config_setup.config_path,
                     config_name=config_setup.config_name,
-                    overrides=list(config_setup.override) + sibling_job.parameters,
+                    overrides=list(config_setup.overrides) + sibling_job.parameters,
                     config_class=config_class,
                 )
             )
@@ -362,7 +360,7 @@ def resolve_sweep_with_dag(
         )
 
         job_parameters = (
-            list(config_setup.override)
+            list(config_setup.overrides)
             + cmdline_overrides_siblings
             + [f"++index={point_idx}"]
             + sum(

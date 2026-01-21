@@ -40,10 +40,7 @@ def _set_metadata(root: ConfigInterface, config_ref: str | None, config_dir: str
 
 
 def _parse_root(data: Mapping[str, Any], config_class: Type[T], config_ref: str | None, config_dir: str | None) -> T:
-    try:
-        root = parse_config(config_class, data)
-    except Exception as exc:  # pragma: no cover
-        raise ConfigLoaderError(f"Unable to parse config {config_ref or config_dir}: {exc}") from exc
+    root = parse_config(config_class, data)
 
     _set_metadata(root, config_ref, config_dir)
     return root

@@ -47,7 +47,7 @@ class ConfigSetup:
     config_name: str | None = None
     config_path: str | None = None
     config_dir: str | None = None
-    override: list[str] = field(default_factory=list)
+    overrides: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         assert self.config_path is not None or (self.config_name is not None and self.config_dir is not None)
