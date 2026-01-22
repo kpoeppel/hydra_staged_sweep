@@ -72,10 +72,12 @@ def load_hydra_config(
     overrides = list(overrides or [])
     if overrides:
         LOGGER.debug(f"Applying {len(overrides)} overrides")
-    overrides = [
-        override.split("=")[0] + '="' + "=".join(override.split("=")[1:]) + '"' if "$" in override else override
-        for override in overrides
-    ]
+
+    #!!!
+    # overrides = [
+    #     (override.split("=")[0] + '="' + "=".join(override.split("=")[1:]) + '"') if "$" in override else override
+    #     for override in overrides
+    # ]
 
     config_dir = Path(config_dir).resolve()
     if not config_dir.exists():

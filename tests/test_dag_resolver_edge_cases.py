@@ -39,7 +39,9 @@ def test_build_dag_warning(caplog):
 
 def test_sibling_match_ignores_stage_path():
     p0 = SweepPoint(index=0, parameters={"stage": "A"}, group_path=(0, 0), stage_path=(False, False))
-    p1 = SweepPoint(index=1, parameters={"stage": "B", "ref": "${sibling.A.x}"}, group_path=(0, 1), stage_path=(False, True))
+    p1 = SweepPoint(
+        index=1, parameters={"stage": "B", "ref": "${sibling.A.x}"}, group_path=(0, 1), stage_path=(False, True)
+    )
     p2 = SweepPoint(index=2, parameters={"stage": "A"}, group_path=(1, 0), stage_path=(False, False))
     dag = build_dependency_dag_from_points({0: p0, 1: p1, 2: p2})
     assert (0, 1) in dag.edges()
@@ -49,13 +51,13 @@ def test_sibling_match_ignores_stage_path():
 def test_config_to_cmdline_edge_cases():
     # List conversion
     res = config_to_cmdline(["a", "b"], prefix="l")
-    assert "l[0,1]" in res or ("l.0=a" in res and "l.1=b" in res)
+    assert "l=[0,1]" in res or ("l.0=a" in res and "l.1=b" in res)
 
     # None conversion
     assert "n=null" in config_to_cmdline(None, prefix="n")
 
     # Unescape interpolations in strings
-    assert "val='${interp}'" in config_to_cmdline(r"${interp}", prefix="val")
+    assert 'val="${interp}"' in config_to_cmdline(r"${interp}", prefix="val")
 
     # Prefix handling
-    assert "foo.bar=val" in config_to_cmdline({"bar": "val"}, prefix="foo")
+    assert 'foo.bar="val"' in config_to_cmdline({"bar": "val"}, prefix="foo")

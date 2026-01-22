@@ -98,6 +98,8 @@ def _build_sibling_index(points: Mapping[int, SweepPoint]) -> SiblingIndex:
 
 
 def _resolve_filter_from_context(filter_expr: Any, context: Mapping[str, Any]) -> bool:
+    if filter_expr is None:
+        return True
     if isinstance(filter_expr, bool):
         return filter_expr
     if not isinstance(filter_expr, str):
@@ -228,43 +230,70 @@ def build_dependency_dag_from_points(
     return dag
 
 
-def config_to_cmdline(cfg_dict: dict, override: str = "", prefix="") -> list[str]:
+def config_to_cmdline(
+    cfg_dict: dict,
+    override: str = "",
+    prefix="",
+    # unescape_sibling_interpolations: bool = False,
+    # inside_sweep: bool = False,
+) -> list[str]:
+    # override either "", "+", "++" see hydra
     cmdline_opts = []
 
-    def dict_to_cmdlines(dct: dict | list | str | int | float, prefix: str = ""):
+    def dict_to_cmdlines(dct: dict | list | str | int | float, prefix: str = ""):  # , inside_sweep=False):
         cmdlines = []
 
         if isinstance(dct, (dict, DictConfig, Mapping)):
             for sub_cfg in dct:
                 newprefix = (prefix + "." if prefix else "") + sub_cfg
-                cmdlines += dict_to_cmdlines(dct[sub_cfg], prefix=newprefix)
+                cmdlines += dict_to_cmdlines(
+                    dct[sub_cfg], prefix=newprefix
+                )  #  inside_sweep=("sweep" == sub_cfg) or inside_sweep
+
         elif isinstance(dct, (list, ListConfig, Sequence)) and not isinstance(dct, (str, bytes)):
-            cmdlines.append(override + prefix + "[" + ",".join(map(str, range(len(dct)))) + "]")
+            cmdlines.append(override + prefix + "=[" + ",".join(map(str, range(len(dct)))) + "]")
             for n, sub_cfg in enumerate(dct):
                 cmdlines += dict_to_cmdlines(
                     sub_cfg,
                     prefix=(prefix + "." if prefix else "") + str(n),
+                    # inside_sweep=inside_sweep,
                 )
         elif dct is None:
             cmdlines.append(override + prefix + "=null")
         else:
-            if isinstance(dct, str) and ("{" in dct or "(" in dct):
-                dct = f"'{dct}'"
+            if isinstance(dct, str):
+                # special case of combining defaults lists / groups in hydra
+                if not re.match(r"\[[A-Za-z][A-Za-z0-9,]*\]", dct):
+                    # unescape interpolations
+                    # if unescape_sibling_interpolations and not inside_sweep:
+                    #     dct = dct.replace("\\${sibling", "${sibling")
+                    dct = dct.replace('"', '\\"')
+                    dct = f'"{dct}"'
             cmdlines.append(override + prefix + "=" + str(dct))
         return cmdlines
 
     cmdline_opts = dict_to_cmdlines(cfg_dict, prefix=prefix)
+    LOGGER.debug("GENERATED CMDLINE OPTS {config_yaml}, {cmdline_opts}")
     return cmdline_opts
 
 
-def param_to_cmdlines(key: str, val: Any, prefix: str = "") -> list[str]:
+def param_to_cmdlines(
+    key: str, val: Any, prefix: str = ""
+):  # , unescape_sibling_interpolations: bool = False) -> list[str]:
     if isinstance(val, str):
-        if "{" in val or "(" in val:
-            return [f"{prefix}{key}='{val}'"]
-        else:
+        # special case of combining defaults lists / groups in hydra
+        if re.match(r"\[[A-Za-z][A-Za-z0-9,]*\]", val):
             return [f"{prefix}{key}={val}"]
+        # if unescape_sibling_interpolations:
+        #     val = val.replace("\\${sibling", "${sibling") if ".sweep." not in val else val
+        val = val.replace('"', '\\"')
+        return [f'{prefix}{key}="{val}"']
     else:
-        return config_to_cmdline(val, override="++", prefix=key)
+        return config_to_cmdline(
+            val,
+            override="++",
+            prefix=key,  # unescape_sibling_interpolations=unescape_sibling_interpolations
+        )
 
 
 def resolve_sweep_with_dag(
@@ -293,6 +322,7 @@ def resolve_sweep_with_dag(
     LOGGER.debug(f"Topological order: {ordered_indices}")
 
     resolved_jobs = {}
+    filtered_jobs = {}
     base_context = asdict(config)
     base_context = {k: v for k, v in base_context.items() if k not in ("sweep", "sibling")}
     sweep_filter_expr = config.sweep.filter
@@ -305,26 +335,6 @@ def resolve_sweep_with_dag(
             raise ValueError(f"Unable to match group_path for filtering: {exc}") from exc
 
         filter_exprs = [sweep_filter_expr, *group_filters]
-        unresolved_filters: list[Any] = []
-        if any(expr is not None for expr in filter_exprs):
-            context = dict(base_context)
-            for key, value in point.parameters.items():
-                if isinstance(value, str) and "${sibling." in value:
-                    continue
-                context[key] = value
-            skip_point = False
-            for expr in filter_exprs:
-                if expr is None:
-                    continue
-                try:
-                    if not _resolve_filter_from_context(expr, context):
-                        LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
-                        skip_point = True
-                        break
-                except ValueError:
-                    unresolved_filters.append(expr)
-            if skip_point:
-                continue
 
         sibling_patterns = sibling_index.patterns_by_idx.get(point_idx, set())
         sibling_jobs = {}
@@ -357,6 +367,7 @@ def resolve_sweep_with_dag(
                 }
             },
             override="++",
+            # unescape_interpolations=False,
         )
 
         job_parameters = (
@@ -364,7 +375,10 @@ def resolve_sweep_with_dag(
             + cmdline_overrides_siblings
             + [f"++index={point_idx}"]
             + sum(
-                [param_to_cmdlines(key, value, prefix="++") for key, value in point.parameters.items()],
+                [
+                    param_to_cmdlines(key, value, prefix="++")  # , unescape_interpolations=False)
+                    for key, value in point.parameters.items()
+                ],
                 start=[],
             )
         )
@@ -377,17 +391,15 @@ def resolve_sweep_with_dag(
             config_class=config_class,
         )
 
-        if unresolved_filters:
-            resolved_dict = asdict(resolved)
-            context = {k: v for k, v in resolved_dict.items() if k not in ("sweep", "sibling")}
-            skip_point = False
-            for expr in unresolved_filters:
-                if not _resolve_filter_from_context(expr, context):
-                    LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
-                    skip_point = True
-                    break
-            if skip_point:
-                continue
+        resolved_dict = asdict(resolved)
+        context = {k: v for k, v in resolved_dict.items() if k not in ("sweep")}
+        skip_point = False
+        for expr in filter_exprs:
+            if not _resolve_filter_from_context(expr, context):
+                LOGGER.info("Skipping point %s due to sweep.filter", point_idx)
+                skip_point = True
+                break
+        filtered_jobs[point_idx] = skip_point
 
         stage_name = getattr(resolved, "stage", None)
 
@@ -400,7 +412,7 @@ def resolve_sweep_with_dag(
 
         resolved_jobs[point_idx] = job
 
-    return list(resolved_jobs.values())
+    return list(resolved_jobs[point_idx] for point_idx in resolved_jobs if not filtered_jobs[point_idx])
 
 
 __all__ = [

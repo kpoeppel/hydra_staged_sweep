@@ -12,6 +12,7 @@ from hydra_staged_sweep.config.loader import (
     load_config_reference,
     ConfigLoaderError,
 )
+from hydra_staged_sweep.dag_resolver import param_to_cmdlines
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
 
 
@@ -101,6 +102,13 @@ def test_load_hydra_config_multiple_defaults_merge(tmp_path):
         setup: dict[str, Any] = field(default_factory=dict)
 
     res = load_hydra_config("base", config_dir, overrides=["setup=[setup1,setup2]"], config_class=DefaultsConfig)
+    assert res.setup["mode"] == "second"
+    assert res.setup["alpha"] == 1
+    assert res.setup["beta"] == 2
+
+    res = load_hydra_config(
+        "base", config_dir, overrides=param_to_cmdlines("setup", "[setup1,setup2]"), config_class=DefaultsConfig
+    )
     assert res.setup["mode"] == "second"
     assert res.setup["alpha"] == 1
     assert res.setup["beta"] == 2

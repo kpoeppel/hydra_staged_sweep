@@ -6,7 +6,7 @@ Defines the core structures required for sweep expansion and staging.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, MISSING
-from typing import Any
+from typing import Any, Literal
 
 from compoconf import ConfigInterface
 
@@ -19,7 +19,7 @@ class SweepConfig(ConfigInterface):
     """
 
     class_name: str = "Sweep"
-    type: str | None = None  # "product" or "list"
+    type: Literal["product", "list"] | None = None  # "product" or "list"
     groups: list[dict[str, Any]] | None = None
     base_values: dict[str, Any] = field(default_factory=dict)
     store_sweep_json: bool = True
@@ -43,7 +43,7 @@ class StagedSweepRoot(ConfigInterface):
 
 @dataclass(kw_only=True)
 class ConfigSetup:
-    pwd: str
+    pwd: str = "."
     config_name: str | None = None
     config_path: str | None = None
     config_dir: str | None = None

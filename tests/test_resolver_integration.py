@@ -1,12 +1,13 @@
 import pytest
-from unittest.mock import MagicMock, patch
+import yaml
 from dataclasses import dataclass, field
-from compoconf import ConfigInterface, parse_config
+from compoconf import ConfigInterface, asdict
 
 from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup, SweepConfig
 from hydra_staged_sweep.config.resolvers import register_default_resolvers
-from hydra_staged_sweep.expander import SweepPoint
+from hydra_staged_sweep.config.loader import load_config_reference
+from hydra_staged_sweep.expander import SweepPoint, expand_sweep
 
 
 @dataclass(kw_only=True)
@@ -20,8 +21,7 @@ class MyRootConfig(StagedSweepRoot):
     some_param: str = "default"
 
 
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_simple_sweep(mock_load):
+def test_resolve_simple_sweep(tmp_path):
     # Setup
     config = MyRootConfig()
     config.sweep = SweepConfig()
@@ -31,26 +31,11 @@ def test_resolve_simple_sweep(mock_load):
         SweepPoint(index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)),
     ]
 
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
 
-    # Mock load_config_reference
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        # Parse base config + overrides
-        # Simulating what loader does (simplified)
-        # We need to handle overrides to update parameters
-        base = MyRootConfig()
-        base_dict = {"some_param": "default"}
-
-        # Apply overrides (very simple parser for test)
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-            if "++index=" in ov:
-                base_dict["index"] = int(ov.split("=")[1])
-
-        return parse_config(MyRootConfig, base_dict)
-
-    mock_load.side_effect = side_effect
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
 
     jobs = resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
@@ -64,10 +49,9 @@ def test_resolve_simple_sweep(mock_load):
     assert jobs[1].config.index == 1
 
 
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_sweep_filter_skips_points(mock_load):
+def test_resolve_sweep_filter_skips_points(tmp_path):
     config = MyRootConfig()
-    config.sweep = SweepConfig(filter="${oc.eval:'\"${some_param}\" == \"val2\"'}")
+    config.sweep = SweepConfig(filter='${oc.eval:\'"${some_param}" == "val2"\'}')
     register_default_resolvers(force=True)
 
     points = [
@@ -75,18 +59,11 @@ def test_resolve_sweep_filter_skips_points(mock_load):
         SweepPoint(index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)),
     ]
 
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
 
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        base_dict = {"some_param": "default"}
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-            if "++index=" in ov:
-                base_dict["index"] = int(ov.split("=")[1])
-        return parse_config(MyRootConfig, base_dict)
-
-    mock_load.side_effect = side_effect
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
 
     jobs = resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
@@ -94,45 +71,34 @@ def test_resolve_sweep_filter_skips_points(mock_load):
     assert jobs[0].config.index == 1
 
 
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_sweep_filter_non_bool_raises(mock_load):
+def test_resolve_sweep_filter_non_bool_raises(tmp_path):
     config = MyRootConfig()
     config.sweep = SweepConfig(filter="not-bool")
 
     points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
 
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        base_dict = {"some_param": "default"}
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-        return parse_config(MyRootConfig, base_dict)
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
 
-    mock_load.side_effect = side_effect
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
 
     with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
         resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
 
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_sweep_filter_resolution_error(mock_load):
+def test_resolve_sweep_filter_resolution_error(tmp_path):
     config = MyRootConfig()
-    config.sweep = SweepConfig(filter="${missing:1}")
+    config.sweep = SweepConfig(filter="\\${missing:1}")
 
     points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
 
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        base_dict = {"some_param": "default"}
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-        return parse_config(MyRootConfig, base_dict)
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
 
-    mock_load.side_effect = side_effect
-
-    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool:"):
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool."):
         resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
 
@@ -149,8 +115,7 @@ def test_resolve_sweep_group_path_mismatch_raises():
         resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
 
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_sweep_filter_none_entry(mock_load):
+def test_resolve_sweep_filter_none_entry(tmp_path):
     config = MyRootConfig()
     config.sweep = SweepConfig(
         filter=True,
@@ -159,40 +124,74 @@ def test_resolve_sweep_filter_none_entry(mock_load):
     )
     register_default_resolvers(force=True)
 
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0, 0), stage_path=(False,))]
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
 
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        base_dict = {"some_param": "default"}
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-        return parse_config(MyRootConfig, base_dict)
-
-    mock_load.side_effect = side_effect
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
+    points = expand_sweep(config.sweep)
 
     jobs = resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
     assert len(jobs) == 1
 
 
-@patch("hydra_staged_sweep.dag_resolver._resolve_filter_from_context")
-@patch("hydra_staged_sweep.dag_resolver.load_config_reference")
-def test_resolve_sweep_filter_unresolved_then_false(mock_load, mock_filter):
+def test_resolve_sweep_filter_by_sibling(tmp_path):
     config = MyRootConfig()
+    config.sweep = SweepConfig(
+        type="product",
+        groups=[
+            {
+                "type": "list",
+                "configs": [
+                    {"stage": "stage1", "some_param": "val1"},
+                    {"stage": "stage2", "some_param": "\\${sibling.stage1.some_param}2"},
+                ],
+            }
+        ],
+        filter="${oc.eval:'\\'${some_param}\\'!=\\'val12\\''}",
+    )
+    register_default_resolvers(force=True)
+
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
+
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
+
+    points = expand_sweep(config.sweep)
+    jobs = resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
+    assert len(jobs) == 1
+
+
+def test_resolve_sweep_filter_unresolved_then_false(tmp_path):
+    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
+    config = MyRootConfig()
+    config.sweep = SweepConfig(
+        filter=False,
+        type="list",
+        groups=[{"type": "product", "params": {"some_param": ["val1"]}}],
+    )
+    config_path = tmp_path / "test.yaml"
+    with open(str(config_path), "w") as fp:
+        yaml.dump(asdict(config), fp)
+    config = load_config_reference(config_path=config_path, config_class=MyRootConfig)
     config.sweep = SweepConfig(filter="expr")
 
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
-    setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool."):
+        resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
-    def side_effect(config_dir=None, config_name=None, config_path=None, overrides=[], config_class=None):
-        base_dict = {"some_param": "default"}
-        for ov in overrides:
-            if "some_param=" in ov:
-                base_dict["some_param"] = ov.split("=")[1]
-        return parse_config(MyRootConfig, base_dict)
+    config = load_config_reference(config_path=config_path, config_class=MyRootConfig)
+    config.sweep = SweepConfig(filter="${expr}")
 
-    mock_load.side_effect = side_effect
-    mock_filter.side_effect = [ValueError("unresolved"), False]
+    setup = ConfigSetup(pwd="/tmp", config_path=config_path)
+    with pytest.raises(ValueError, match="sweep.filter must resolve to a bool."):
+        resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
 
-    jobs = resolve_sweep_with_dag(config, points, setup, config_class=MyRootConfig)
-    assert jobs == []
+
+if __name__ == "__main__":
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp_path:
+        test_resolve_sweep_filter_by_sibling(Path(tmp_path))
