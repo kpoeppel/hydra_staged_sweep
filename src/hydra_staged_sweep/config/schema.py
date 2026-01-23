@@ -5,7 +5,7 @@ Defines the core structures required for sweep expansion and staging.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from compoconf import ConfigInterface
@@ -30,8 +30,8 @@ class SweepConfig(ConfigInterface):
 class StagedSweepRoot(ConfigInterface):
     """Minimal interface expected by hydra_staged_sweep.
 
-    External applications should inherit from this or define a compatible
-    structure that includes these fields.
+    External applications should inherit from this or define a
+    compatible structure that includes these fields.
     """
 
     sweep: SweepConfig = field(default_factory=SweepConfig)
@@ -50,4 +50,6 @@ class ConfigSetup:
     overrides: list[str] = field(default_factory=list)
 
     def __post_init__(self):
-        assert self.config_path is not None or (self.config_name is not None and self.config_dir is not None)
+        assert self.config_path is not None or (
+            self.config_name is not None and self.config_dir is not None
+        )

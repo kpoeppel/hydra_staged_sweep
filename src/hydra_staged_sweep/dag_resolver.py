@@ -17,16 +17,16 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from itertools import zip_longest
-from typing import Any, Type
+from typing import Any
 
 import networkx as nx
 from compoconf import asdict
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
-from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
-from hydra_staged_sweep.config.loader import load_config_reference
-from hydra_staged_sweep.expander import SweepPoint
-from hydra_staged_sweep.planner import JobPlan
+from .config.schema import StagedSweepRoot, ConfigSetup
+from .config.loader import load_config_reference
+from .expander import SweepPoint
+from .planner import JobPlan
 
 LOGGER = logging.getLogger(__file__)
 
@@ -61,7 +61,8 @@ def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
 
 
 def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ...]:
-    """Build a matching key that ignores globally stage-flagged path segments."""
+    """Build a matching key that ignores globally stage-flagged path
+    segments."""
     return tuple(
         group_idx for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False) if not is_stage
     )
@@ -125,7 +126,7 @@ def _collect_group_filters(groups: list[dict[str, Any]] | None, group_path: tupl
     cursor = 0
 
     def walk(group_list: list[dict[str, Any]]) -> None:
-        nonlocal cursor, filters
+        nonlocal cursor, filters  # noqa: F824
         for group_idx, group in enumerate(group_list):
             if cursor >= len(group_path):
                 raise ValueError("Group path does not match sweep groups.")
@@ -234,21 +235,16 @@ def config_to_cmdline(
     cfg_dict: dict,
     override: str = "",
     prefix="",
-    # unescape_sibling_interpolations: bool = False,
-    # inside_sweep: bool = False,
 ) -> list[str]:
-    # override either "", "+", "++" see hydra
     cmdline_opts = []
 
-    def dict_to_cmdlines(dct: dict | list | str | int | float, prefix: str = ""):  # , inside_sweep=False):
+    def dict_to_cmdlines(dct: dict | list | str | int | float, prefix: str = ""):
         cmdlines = []
 
         if isinstance(dct, (dict, DictConfig, Mapping)):
             for sub_cfg in dct:
                 newprefix = (prefix + "." if prefix else "") + sub_cfg
-                cmdlines += dict_to_cmdlines(
-                    dct[sub_cfg], prefix=newprefix
-                )  #  inside_sweep=("sweep" == sub_cfg) or inside_sweep
+                cmdlines += dict_to_cmdlines(dct[sub_cfg], prefix=newprefix)
 
         elif isinstance(dct, (list, ListConfig, Sequence)) and not isinstance(dct, (str, bytes)):
             cmdlines.append(override + prefix + "=[" + ",".join(map(str, range(len(dct)))) + "]")
@@ -256,17 +252,12 @@ def config_to_cmdline(
                 cmdlines += dict_to_cmdlines(
                     sub_cfg,
                     prefix=(prefix + "." if prefix else "") + str(n),
-                    # inside_sweep=inside_sweep,
                 )
         elif dct is None:
             cmdlines.append(override + prefix + "=null")
         else:
             if isinstance(dct, str):
-                # special case of combining defaults lists / groups in hydra
                 if not re.match(r"\[[A-Za-z][A-Za-z0-9,]*\]", dct):
-                    # unescape interpolations
-                    # if unescape_sibling_interpolations and not inside_sweep:
-                    #     dct = dct.replace("\\${sibling", "${sibling")
                     dct = dct.replace('"', '\\"')
                     dct = f'"{dct}"'
             cmdlines.append(override + prefix + "=" + str(dct))
@@ -277,22 +268,17 @@ def config_to_cmdline(
     return cmdline_opts
 
 
-def param_to_cmdlines(
-    key: str, val: Any, prefix: str = ""
-):  # , unescape_sibling_interpolations: bool = False) -> list[str]:
+def param_to_cmdlines(key: str, val: Any, prefix: str = ""):
     if isinstance(val, str):
-        # special case of combining defaults lists / groups in hydra
         if re.match(r"\[[A-Za-z][A-Za-z0-9,]*\]", val):
             return [f"{prefix}{key}={val}"]
-        # if unescape_sibling_interpolations:
-        #     val = val.replace("\\${sibling", "${sibling") if ".sweep." not in val else val
         val = val.replace('"', '\\"')
         return [f'{prefix}{key}="{val}"']
     else:
         return config_to_cmdline(
             val,
             override="++",
-            prefix=key,  # unescape_sibling_interpolations=unescape_sibling_interpolations
+            prefix=key,
         )
 
 
@@ -300,7 +286,7 @@ def resolve_sweep_with_dag(
     config: StagedSweepRoot,
     points: list[SweepPoint] | dict[int, SweepPoint],
     config_setup: ConfigSetup,
-    config_class: Type = StagedSweepRoot,
+    config_class: type = StagedSweepRoot,
 ) -> list[JobPlan]:
     """Pure OmegaConf resolution with DAG ordering."""
     LOGGER.info(f"Starting DAG resolution for {len(points)} sweep points")
@@ -367,7 +353,6 @@ def resolve_sweep_with_dag(
                 }
             },
             override="++",
-            # unescape_interpolations=False,
         )
 
         job_parameters = (
@@ -375,10 +360,7 @@ def resolve_sweep_with_dag(
             + cmdline_overrides_siblings
             + [f"++index={point_idx}"]
             + sum(
-                [
-                    param_to_cmdlines(key, value, prefix="++")  # , unescape_interpolations=False)
-                    for key, value in point.parameters.items()
-                ],
+                [param_to_cmdlines(key, value, prefix="++") for key, value in point.parameters.items()],
                 start=[],
             )
         )

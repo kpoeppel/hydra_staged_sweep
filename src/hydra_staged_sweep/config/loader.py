@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Type, TypeVar
+from typing import Any, TypeVar
 from collections.abc import Iterable, Mapping
 
 from compoconf import parse_config, ConfigInterface
@@ -39,14 +39,16 @@ def _set_metadata(root: ConfigInterface, config_ref: str | None, config_dir: str
             root.metadata.setdefault("config_dir", str(config_dir))
 
 
-def _parse_root(data: Mapping[str, Any], config_class: Type[T], config_ref: str | None, config_dir: str | None) -> T:
+def _parse_root(
+    data: Mapping[str, Any], config_class: type[T], config_ref: str | None, config_dir: str | None
+) -> T:
     root = parse_config(config_class, data)
 
     _set_metadata(root, config_ref, config_dir)
     return root
 
 
-def load_config(path: str | Path, config_class: Type[T] = schema.StagedSweepRoot) -> T:
+def load_config(path: str | Path, config_class: type[T] = schema.StagedSweepRoot) -> T:
     """Load and validate a configuration file into ``config_class``."""
 
     path = Path(path)
@@ -64,7 +66,7 @@ def load_hydra_config(
     config_name: str,
     config_dir: str | Path,
     overrides: Iterable[str] | None = None,
-    config_class: Type[T] = schema.StagedSweepRoot,
+    config_class: type[T] = schema.StagedSweepRoot,
 ) -> T:
     LOGGER.info(f"Loading Hydra config: {config_name} from {config_dir}")
     register_default_resolvers()
@@ -72,12 +74,6 @@ def load_hydra_config(
     overrides = list(overrides or [])
     if overrides:
         LOGGER.debug(f"Applying {len(overrides)} overrides")
-
-    #!!!
-    # overrides = [
-    #     (override.split("=")[0] + '="' + "=".join(override.split("=")[1:]) + '"') if "$" in override else override
-    #     for override in overrides
-    # ]
 
     config_dir = Path(config_dir).resolve()
     if not config_dir.exists():
@@ -98,7 +94,7 @@ def load_config_reference(
     config_path: str | Path | None = None,
     config_dir: str | Path | None = None,
     overrides: Iterable[str] | None = None,
-    config_class: Type[T] = schema.StagedSweepRoot,
+    config_class: type[T] = schema.StagedSweepRoot,
 ) -> T:
     if config_name is None and config_path:
         path = Path(config_path)

@@ -64,7 +64,9 @@ def test_parse_config_exception():
         config_path.write_text("other_field: value\n")
 
         # Test in load_config_reference (lines 265-266)
-        with pytest.raises(ValueError, match=r"Undefined keys {'other_field'} in data"):
+        with pytest.raises(
+            ValueError, match=r"Undefined keys {'other_field'} and unset keys {'required_field'} in data"
+        ):
             load_config_reference(
                 config_path=str(config_path),
                 overrides=["other_field=changed"],  # Pass overrides to go through that path

@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 from omegaconf import OmegaConf
 
-from hydra_staged_sweep.config.schema import SweepConfig
+from .config.schema import SweepConfig
 
 LOGGER = logging.getLogger(__file__)
 
