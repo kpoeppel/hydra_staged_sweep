@@ -16,6 +16,7 @@ def test_expand_group_with_empty_groups():
         base_values={"param": "value"},
         group_path=(),
         stage_path=(),
+        list_composition=set(),
     )
 
     # Should return the base values

@@ -199,6 +199,7 @@ def test_unknown_group_type():
             base_values={},
             group_path=(),
             stage_path=(),
+            list_composition=set(),
         )
 
 
@@ -206,5 +207,5 @@ def test_cartesian_product_empty():
     """Cover line 257: empty list returns empty."""
     from hydra_staged_sweep.expander import _cartesian_product_groups
 
-    result = _cartesian_product_groups([])
+    result = _cartesian_product_groups([], set())
     assert result == []
