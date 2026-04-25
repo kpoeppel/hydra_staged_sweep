@@ -144,3 +144,69 @@ def test_eval_blocked_tokens():
 
     with pytest.raises(ValueError, match="blocked token"):
         OmegaConf.create({"val": "${oc.eval:'input(1)'}"}).val
+
+
+def test_comparisons():
+    assert OmegaConf.create({"v": "${oc.eq:1,1}"}).v is True
+    assert OmegaConf.create({"v": "${oc.eq:1,2}"}).v is False
+    assert OmegaConf.create({"v": "${oc.neq:1,2}"}).v is True
+    assert OmegaConf.create({"v": "${oc.gt:3,2}"}).v is True
+    assert OmegaConf.create({"v": "${oc.lt:1,2}"}).v is True
+    assert OmegaConf.create({"v": "${oc.geq:2,2}"}).v is True
+    assert OmegaConf.create({"v": "${oc.leq:1,2}"}).v is True
+
+
+def test_join():
+    c = OmegaConf.create({"a": ["1", "2", "3"], "v": "${oc.join:'.',${a}}"})
+    assert c.v == "1.2.3"
+
+
+def test_split():
+    c = OmegaConf.create({"a": "1 2 3", "v": "${oc.split:${a},' '}"})
+    assert list(c.v) == ["1", "2", "3"]
+
+
+def test_tmpl():
+    c = OmegaConf.create({"v": "${oc.tmpl:'x=%',foo}"})
+    assert c.v == "x=foo"
+
+
+def test_maptmpl():
+    c = OmegaConf.create({"a": ["x", "y"], "v": "${oc.maptmpl:'val=%',${a}}"})
+    assert list(c.v) == ["val=x", "val=y"]
+
+
+def test_mapeval():
+    c = OmegaConf.create({"a": ["1+1", "2*3"], "v": "${oc.mapeval:${a}}"})
+    assert list(c.v) == [2, 6]
+
+
+def test_mapkeytmpl():
+    c = OmegaConf.create({"a": ["x", "y"], "v": "${oc.mapkeytmpl:k,'val=%',${a}}"})
+    assert list(c.v) == [{"k": "val=x"}, {"k": "val=y"}]
+
+
+def test_mapkeyvaltmpl():
+    c = OmegaConf.create({"d": {"a": "1", "b": "2"}, "v": "${oc.mapkeyvaltmpl:'%k=%v',${d}}"})
+    result = list(c.v)
+    assert "a=1" in result
+    assert "b=2" in result
+
+
+def test_mapvaltmpl():
+    c = OmegaConf.create({"d": {"x": "1", "y": "2"}, "v": "${oc.mapvaltmpl:'v=%v',${d}}"})
+    assert c.v["x"] == "v=1"
+    assert c.v["y"] == "v=2"
+
+
+def test_mapextractkey():
+    c = OmegaConf.create({"items": [{"n": "a"}, {"n": "b"}], "v": "${oc.mapextractkey:n,${items}}"})
+    assert list(c.v) == ["a", "b"]
+
+
+def test_mapcondtmpl():
+    c = OmegaConf.create({"a": ["foo", "bar", "baz"], "v": "${oc.mapcondtmpl:'^b.*','B=%','other=%',${a}}"})
+    result = list(c.v)
+    assert result[0] == "other=foo"
+    assert result[1] == "B=bar"
+    assert result[2] == "B=baz"
