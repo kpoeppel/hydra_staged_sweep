@@ -121,6 +121,27 @@ Run the tests using `pytest`:
 PYTHONPATH=src pytest tests/
 ```
 
+## Performance
+
+Building a sweep composes the same config tree once per sweep point, and Hydra
+keeps nothing between `compose()` calls. `hydra_staged_sweep.config.cache`
+installs in-memory caches for the parts that repeat -- parsed config files,
+config-group lookups, merged defaults lists, and the ANTLR parse trees for
+interpolations and command-line overrides -- and backs OmegaConf's YAML loader
+with libyaml where available. Entries are revalidated with `stat()` on every
+lookup, so editing a config on disk invalidates exactly the entries that depend
+on it; composition results are unchanged.
+
+The caches are installed automatically when `hydra_staged_sweep.config.loader`
+is imported. Set `HYDRA_STAGED_SWEEP_CACHE=0` to turn them off, or call
+`cache.disable()`. `cache.stats()` reports hit/miss counters per layer.
+
+Staged sweeps additionally reuse each sibling's already-resolved config instead
+of recomposing it, and merge the sibling context into the composed config in one
+step rather than round-tripping it through several hundred `++key=value`
+overrides. `JobPlan.parameters` still records those overrides, so a job remains
+reproducible from the command line.
+
 ## Security Note
 
 Sibling interpolation must be escaped in the original config because siblings are not available until after the first resolution pass.
