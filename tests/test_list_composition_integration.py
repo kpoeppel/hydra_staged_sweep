@@ -4,11 +4,9 @@ import tempfile
 from pathlib import Path
 from dataclasses import dataclass, field
 
-import pytest
 from hydra_staged_sweep.config.schema import SweepConfig, StagedSweepRoot, ConfigSetup
 from hydra_staged_sweep.expander import expand_sweep
 from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
-from compoconf import ConfigInterface
 
 
 @dataclass(kw_only=True)
@@ -21,13 +19,19 @@ class TestConfig(StagedSweepRoot):
 
 
 def test_list_composition_end_to_end():
-    """Test list composition from sweep expansion through command-line generation."""
+    """Test list composition from sweep expansion through command-line
+    generation."""
     config = TestConfig(
         sweep=SweepConfig(
             type="product",
             groups=[
                 {"params": {"plugins": ["logger", "wandb"]}},  # 2 values
-                {"params": {"plugins": ["tensorboard"], "learning_rate": [0.001, 0.01]}},  # 1 * 2 = 2
+                {
+                    "params": {
+                        "plugins": ["tensorboard"],
+                        "learning_rate": [0.001, 0.01],
+                    }
+                },  # 1 * 2 = 2
             ],
             list_composition=["plugins"],
         )
@@ -49,11 +53,14 @@ def test_list_composition_end_to_end():
 
     # Check specific combinations exist
     assert any(
-        p.parameters["plugins"] == ["logger", "tensorboard"] and p.parameters["learning_rate"] == 0.001
+        p.parameters["plugins"] == ["logger", "tensorboard"]
+        and p.parameters["learning_rate"] == 0.001
         for p in points
     )
     assert any(
-        p.parameters["plugins"] == ["wandb", "tensorboard"] and p.parameters["learning_rate"] == 0.01 for p in points
+        p.parameters["plugins"] == ["wandb", "tensorboard"]
+        and p.parameters["learning_rate"] == 0.01
+        for p in points
     )
 
 
@@ -127,7 +134,8 @@ def test_list_composition_multiple_params():
 
 
 def test_list_composition_partial():
-    """Test that only specified parameters are accumulated, others are overridden."""
+    """Test that only specified parameters are accumulated, others are
+    overridden."""
     config = TestConfig(
         sweep=SweepConfig(
             type="product",

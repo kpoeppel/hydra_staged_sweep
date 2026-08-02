@@ -93,7 +93,9 @@ def _resolved_file(source: Any, config_path: str) -> str | None:
     """Absolute path backing ``config_path`` in ``source``, if file-backed."""
     if source.scheme() != "file":
         return None
-    return os.path.realpath(os.path.join(source.path, source._normalize_file_name(config_path)))
+    return os.path.realpath(
+        os.path.join(source.path, source._normalize_file_name(config_path))
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +198,11 @@ def _install_repo_cache() -> None:
         _stats["repo_miss"] += 1
         result = _orig_repo_load(self, config_path)
         must_copy = _has_matching_schema(self, config_path)
-        _repo_cache[key] = (fingerprint, copy.deepcopy(result) if must_copy else result, must_copy)
+        _repo_cache[key] = (
+            fingerprint,
+            copy.deepcopy(result) if must_copy else result,
+            must_copy,
+        )
         return result
 
     ConfigRepository.load_config = load_config  # type: ignore[assignment]
@@ -231,7 +237,9 @@ def _install_lazy_repo_copy() -> None:
         self.cache = {}
         self._hss_owns_delegate = False
 
-    def initialize_sources(self: CachingConfigRepository, config_search_path: Any) -> None:
+    def initialize_sources(
+        self: CachingConfigRepository, config_search_path: Any
+    ) -> None:
         if not getattr(self, "_hss_owns_delegate", False):
             self.delegate = copy.deepcopy(self.delegate)
             self._hss_owns_delegate = True
@@ -260,7 +268,9 @@ def _install_lookup_cache() -> None:
         return
     _orig_find_source = ConfigRepository._find_object_source
 
-    def _find_object_source(self: ConfigRepository, config_path: str, object_type: Any) -> Any:
+    def _find_object_source(
+        self: ConfigRepository, config_path: str, object_type: Any
+    ) -> Any:
         key = (
             config_path,
             object_type,
@@ -312,7 +322,9 @@ def _install_store_watch() -> None:
 
 def _defaults_key(defaults: list[Any], repo: Any) -> Any:
     return (
-        tuple((d.config_path, d.parent, d.package, d.is_self, d.primary) for d in defaults),
+        tuple(
+            (d.config_path, d.parent, d.package, d.is_self, d.primary) for d in defaults
+        ),
         tuple((s.scheme(), s.provider, s.path) for s in repo.get_sources()),
         _store_generation[0],
     )
@@ -606,7 +618,11 @@ def enable(
 def disable() -> None:
     """Restore Hydra's and OmegaConf's original behaviour."""
     global _enabled, _orig_repo_load, _orig_compose, _orig_parse, _orig_parse_rule
-    global _orig_find_source, _orig_store, _orig_create_defaults_list, _orig_caching_init
+    global \
+        _orig_find_source, \
+        _orig_store, \
+        _orig_create_defaults_list, \
+        _orig_caching_init
     if _orig_repo_load is not None:
         from hydra._internal.config_repository import ConfigRepository
 

@@ -5,8 +5,8 @@ A generic library for managing parameter sweeps and staged configurations using 
 ## Features
 
 - **Parameter Sweeps**: Define grid or composable sweeps in your configuration.
-- **Staged Configuration**: Support for multi-stage experiments (e.g., burn-in, stable, decay) via `sibling` references.
-- **DAG Resolution**: Resolve dependencies between jobs (e.g., staged runs) using a DAG based on parameter matching.
+- **Staged Configuration**: Support for multi-stage experiments (for example, burn-in, stable, decay) by way of `sibling` references.
+- **DAG Resolution**: Resolve dependencies between jobs (for example, staged runs) using a DAG based on parameter matching.
 - **Pure OmegaConf**: Uses standard OmegaConf interpolations.
 - **Generic**: Works with any configuration schema that implements the `StagedSweepRoot` protocol.
 
@@ -14,7 +14,7 @@ A generic library for managing parameter sweeps and staged configurations using 
 
 ### 1. Configuration (YAML)
 
-Create a configuration file (e.g., `conf/config.yaml`) that defines your sweep and stages.
+Create a configuration file (for example, `conf/config.yaml`) that defines your sweep and stages.
 
 ```yaml
 # conf/config.yaml
@@ -38,18 +38,18 @@ sweep:
   # Filter runs after full resolution; must resolve to a bool.
   # Use escaped interpolation so it is evaluated after overrides are applied.
   filter: "\\${oc.eval:'\\${learning_rate} < 0.001 and \\${batch_size} == 32'}"
-    
+
     # 2. Stages (Sequential)
     - type: "list"
       configs:
         - stage: "stable"
           train_iters: 1000
-        
+
         - stage: "decay"
           train_iters: 200
           # Reference the 'stable' stage of the *same* hyperparameter combination
           # Sibling interpolation must be escaped in the original config.
-          load_path: "\\${sibling.stable.project.base_output_dir}/checkpoints" 
+          load_path: "\\${sibling.stable.project.base_output_dir}/checkpoints"
 ```
 
 ### 2. Python Implementation
@@ -84,7 +84,7 @@ class MyRootConfig(StagedSweepRoot):
 config_path = "conf/config.yaml"
 # Ensure the directory exists or point to a real one
 # Path("conf").mkdir(exist_ok=True)
-# Path(config_path).write_text("...") 
+# Path(config_path).write_text("...")
 
 root_config = load_config(config_path, config_class=MyRootConfig)
 
@@ -108,9 +108,9 @@ for plan in plans:
     print(f"  Params: LR={cfg.learning_rate}, BS={cfg.batch_size}")
     if cfg.load_path:
         print(f"  Dependency: Loading from {cfg.load_path}")
-    
+
     # plan.parameters contains the CLI overrides for this specific job
-    # e.g. ["++learning_rate=0.0001", "++stage=stable", ...]
+    # for example ["++learning_rate=0.0001", "++stage=stable", ...]
 ```
 
 ## Testing

@@ -23,7 +23,9 @@ class SweepPoint:
     index: int = field(default_factory=MISSING)
     parameters: Mapping[str, Any]
     group_path: tuple[int, ...] = field(default_factory=tuple)  # Track group hierarchy
-    stage_path: tuple[bool, ...] = field(default_factory=tuple)  # Track group stage sweeps
+    stage_path: tuple[bool, ...] = field(
+        default_factory=tuple
+    )  # Track group stage sweeps
 
 
 def expand_sweep(config: SweepConfig) -> list[SweepPoint]:
@@ -90,7 +92,9 @@ def _expand_composable_sweep(
     ]
 
     if not points:
-        points.append(SweepPoint(index=0, parameters=base_values, group_path=(), stage_path=()))
+        points.append(
+            SweepPoint(index=0, parameters=base_values, group_path=(), stage_path=())
+        )
 
     return points
 
@@ -112,9 +116,17 @@ def _expand_group(
         List of (parameters, group_path, stage_path) tuples
     """
     if not groups:
-        return [(dict(base_values), group_path + (0,), stage_path + ("stage" in list(base_values),))]
+        return [
+            (
+                dict(base_values),
+                group_path + (0,),
+                stage_path + ("stage" in list(base_values),),
+            )
+        ]
 
-    all_combinations: list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]] = []
+    all_combinations: list[
+        tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]
+    ] = []
 
     for group_idx, group in enumerate(groups):
         current_path = group_path + (group_idx,)
@@ -177,7 +189,9 @@ def _expand_group(
             for config_idx, config_dict in enumerate(configs):
                 # Check if this config is itself a nested group
                 if isinstance(config_dict, dict) and (
-                    "groups" in config_dict or "params" in config_dict or "configs" in config_dict
+                    "groups" in config_dict
+                    or "params" in config_dict
+                    or "configs" in config_dict
                 ):
                     stage_idx = _nested_has_stage_key(config_dict, stage_str)
                     # Nested group - recursively expand
@@ -218,7 +232,9 @@ def _expand_group(
             #     combinations = [(*comb, stage_path + (False,)) for comb in combinations]
             all_combinations.append(combinations)
         else:
-            raise ValueError(f"Group must have 'groups', 'params', or 'configs': {group}")
+            raise ValueError(
+                f"Group must have 'groups', 'params', or 'configs': {group}"
+            )
 
     # Combine all group results based on composition mode
     if group_type == "product":
@@ -231,7 +247,9 @@ def _expand_group(
             result.extend(group_combos)
         return result
     else:
-        raise ValueError(f"Unknown group type: {group_type}. Must be 'product' or 'list'.")
+        raise ValueError(
+            f"Unknown group type: {group_type}. Must be 'product' or 'list'."
+        )
 
 
 def _cartesian_product_groups(
@@ -240,8 +258,9 @@ def _cartesian_product_groups(
 ) -> list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]]:
     """Compute cartesian product of parameter groups.
 
-    Merges parameters from each group and combines group paths.
-    For parameters in list_composition, accumulates values into lists instead of overriding.
+    Merges parameters from each group and combines group paths. For
+    parameters in list_composition, accumulates values into lists
+    instead of overriding.
     """
     if not groups:
         return []

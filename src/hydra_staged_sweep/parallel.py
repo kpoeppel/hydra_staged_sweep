@@ -49,7 +49,9 @@ def worker_count(chunks: int, items: int, *, requested: int | None = None) -> in
     return max(1, min(requested, chunks))
 
 
-def run_chunks(func: Callable[[Any], T], chunks: Sequence[Any], workers: int) -> list[T]:
+def run_chunks(
+    func: Callable[[Any], T], chunks: Sequence[Any], workers: int
+) -> list[T]:
     """Apply ``func`` to each chunk, in a fork pool when ``workers > 1``.
 
     ``func`` and the data it closes over are inherited through the fork, so

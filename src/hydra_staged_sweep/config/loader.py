@@ -35,7 +35,9 @@ def _load_yaml(path: str | Path) -> Mapping[str, Any]:
     return OmegaConf.to_container(cfg, resolve=True)  # type: ignore[return-value]
 
 
-def _set_metadata(root: ConfigInterface, config_ref: str | None, config_dir: str | None) -> None:
+def _set_metadata(
+    root: ConfigInterface, config_ref: str | None, config_dir: str | None
+) -> None:
     if hasattr(root, "metadata") and isinstance(root.metadata, dict):
         if config_ref is not None:
             root.metadata.setdefault("config_ref", str(config_ref))
@@ -44,7 +46,10 @@ def _set_metadata(root: ConfigInterface, config_ref: str | None, config_dir: str
 
 
 def _parse_root(
-    data: Mapping[str, Any], config_class: type[T], config_ref: str | None, config_dir: str | None
+    data: Mapping[str, Any],
+    config_class: type[T],
+    config_ref: str | None,
+    config_dir: str | None,
 ) -> T:
     root = parse_config(config_class, data)
 
@@ -78,7 +83,11 @@ def _merge_extra_config(cfg: Any, extra_config: Mapping[str, Any] | None) -> Non
         return
     # Accepts an already-built container so callers that reuse the same context
     # across configs can build it once; merging does not modify the source.
-    source = extra_config if OmegaConf.is_config(extra_config) else OmegaConf.create(dict(extra_config))
+    source = (
+        extra_config
+        if OmegaConf.is_config(extra_config)
+        else OmegaConf.create(dict(extra_config))
+    )
     with open_dict(cfg):
         cfg.merge_with(source)
 
@@ -129,7 +138,9 @@ def load_config_reference(
                 import json
 
                 try:
-                    reference_data = json.loads(config_reference_path.read_text(encoding="utf-8"))
+                    reference_data = json.loads(
+                        config_reference_path.read_text(encoding="utf-8")
+                    )
                     original_config_ref = reference_data.get("config_ref")
                     original_config_dir = reference_data.get("config_dir")
                     original_overrides = reference_data.get("overrides", [])
@@ -149,7 +160,9 @@ def load_config_reference(
                         exc,
                     )
 
-            with initialize_config_dir(version_base=None, config_dir=os.path.abspath(path.parent)):
+            with initialize_config_dir(
+                version_base=None, config_dir=os.path.abspath(path.parent)
+            ):
                 cfg = compose(config_name=path.name[:-5], overrides=overrides)
 
             _merge_extra_config(cfg, extra_config)
@@ -162,7 +175,11 @@ def load_config_reference(
         else:
             return load_config(path, config_class=config_class)
     return load_hydra_config(
-        config_name, config_dir, overrides, config_class=config_class, extra_config=extra_config
+        config_name,
+        config_dir,
+        overrides,
+        config_class=config_class,
+        extra_config=extra_config,
     )
 
 
