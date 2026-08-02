@@ -2,9 +2,11 @@ import pytest
 from omegaconf import OmegaConf
 from hydra_staged_sweep.config.resolvers import register_default_resolvers
 
+
 @pytest.fixture(autouse=True)
 def setup_resolvers():
     register_default_resolvers(force=True)
+
 
 def test_mul():
     c = OmegaConf.create({"val": "${oc.mul:2,3,4}"})
@@ -12,11 +14,13 @@ def test_mul():
     c2 = OmegaConf.create({"val": "${oc.mul:2,invalid,4}"})
     assert c2.val == 8.0
 
+
 def test_muli():
     c = OmegaConf.create({"val": "${oc.muli:2,3,4}"})
     assert c.val == 24
     c2 = OmegaConf.create({"val": "${oc.muli:2,invalid,4}"})
     assert c2.val == 8
+
 
 def test_add():
     c = OmegaConf.create({"val": "${oc.add:2,3,4}"})
@@ -24,11 +28,13 @@ def test_add():
     c2 = OmegaConf.create({"val": "${oc.add:2,invalid,4}"})
     assert c2.val == 6.0
 
+
 def test_addi():
     c = OmegaConf.create({"val": "${oc.addi:2,3,4}"})
     assert c.val == 9
     c2 = OmegaConf.create({"val": "${oc.addi:2,invalid,4}"})
     assert c2.val == 6
+
 
 def test_sub():
     c = OmegaConf.create({"val": "${oc.sub:10,4}"})
@@ -36,38 +42,42 @@ def test_sub():
     c2 = OmegaConf.create({"val": "${oc.sub:10,invalid}"})
     assert c2.val == 0.0
 
+
 def test_subi():
     c = OmegaConf.create({"val": "${oc.subi:10,4}"})
     assert c.val == 6
     c2 = OmegaConf.create({"val": "${oc.subi:10,invalid}"})
     assert c2.val == 0
 
+
 def test_div():
     c = OmegaConf.create({"val": "${oc.div:10,2}"})
     assert c.val == 5.0
     c2 = OmegaConf.create({"val": "${oc.div:10,0}"})
-    assert c.val == 5.0 # Wait, c2.val
+    assert c.val == 5.0  # Wait, c2.val
     assert c2.val == 0.0
-    
+
     # List division
     c3 = OmegaConf.create({"l": [10, 20], "r": [2, 5], "val": "${oc.div:${l},${r}}"})
     assert list(c3.val) == [5.0, 4.0]
-    
+
     c4 = OmegaConf.create({"l": [10, 20], "r": 2, "val": "${oc.div:${l},${r}}"})
     assert list(c4.val) == [5.0, 10.0]
+
 
 def test_divi():
     c = OmegaConf.create({"val": "${oc.divi:10,3}"})
     assert c.val == 3
     c2 = OmegaConf.create({"val": "${oc.divi:10,0}"})
     assert c2.val == 0
-    
+
     # List division
     c3 = OmegaConf.create({"l": [10, 20], "r": [2, 5], "val": "${oc.divi:${l},${r}}"})
     assert list(c3.val) == [5, 4]
-    
+
     c4 = OmegaConf.create({"l": [10, 20], "r": 2, "val": "${oc.divi:${l},${r}}"})
     assert list(c4.val) == [5, 10]
+
 
 def test_cdivi():
     c = OmegaConf.create({"val": "${oc.cdivi:10,3}"})
@@ -77,21 +87,26 @@ def test_cdivi():
     c3 = OmegaConf.create({"val": "${oc.cdivi:invalid,3}"})
     assert c3.val == 0
 
+
 def test_sqrt():
     c = OmegaConf.create({"val": "${oc.sqrt:16}"})
     assert c.val == 4.0
+
 
 def test_slice():
     c = OmegaConf.create({"val": "${oc.slice:hello,0,3}"})
     assert c.val == "hel"
 
+
 def test_mul_round_int():
     c = OmegaConf.create({"val": "${oc.mul_round_int:10,1.5,8}"})
     assert c.val == 16
 
+
 def test_concat():
     c = OmegaConf.create({"val": "${oc.concat:foo,bar}"})
     assert c.val == "foobar"
+
 
 def test_int_cast():
     c = OmegaConf.create({"val": "${oc.int:123}"})
@@ -99,22 +114,23 @@ def test_int_cast():
     c2 = OmegaConf.create({"val": "${oc.int:True}"})
     assert c2.val == 1
     c3 = OmegaConf.create({"val": "${oc.int:invalid}"})
-    assert c3.val == 1 # bool("invalid") is True, int(True) is 1
+    assert c3.val == 1  # bool("invalid") is True, int(True) is 1
+
 
 def test_dict_merge():
-    c = OmegaConf.create({
-        "d1": {"a": 1},
-        "d2": {"b": 2},
-        "val": "${oc.dict_merge:${d1},${d2},null}"
-    })
+    c = OmegaConf.create(
+        {"d1": {"a": 1}, "d2": {"b": 2}, "val": "${oc.dict_merge:${d1},${d2},null}"}
+    )
     assert c.val == {"a": 1, "b": 2}
-    
+
     c2 = OmegaConf.create({"val": "${oc.dict_merge:null,invalid}"})
     assert c2.val == {}
+
 
 def test_timestring():
     c = OmegaConf.create({"val": "${oc.timestring:}"})
     assert len(c.val) > 0
+
 
 def test_oc_if():
     c1 = OmegaConf.create({"val": "${oc.if:True,yes,no}"})
@@ -126,9 +142,11 @@ def test_oc_if():
     c4 = OmegaConf.create({"val": "${oc.if:0,yes,no}"})
     assert c4.val == "no"
 
+
 def test_len():
     c = OmegaConf.create({"val": "${oc.len:[1,2,3]}"})
     assert c.val == 3
+
 
 def test_eval():
     c = OmegaConf.create({"val": "${oc.eval:1+1}"})
@@ -187,25 +205,36 @@ def test_mapkeytmpl():
 
 
 def test_mapkeyvaltmpl():
-    c = OmegaConf.create({"d": {"a": "1", "b": "2"}, "v": "${oc.mapkeyvaltmpl:'%k=%v',${d}}"})
+    c = OmegaConf.create(
+        {"d": {"a": "1", "b": "2"}, "v": "${oc.mapkeyvaltmpl:'%k=%v',${d}}"}
+    )
     result = list(c.v)
     assert "a=1" in result
     assert "b=2" in result
 
 
 def test_mapvaltmpl():
-    c = OmegaConf.create({"d": {"x": "1", "y": "2"}, "v": "${oc.mapvaltmpl:'v=%v',${d}}"})
+    c = OmegaConf.create(
+        {"d": {"x": "1", "y": "2"}, "v": "${oc.mapvaltmpl:'v=%v',${d}}"}
+    )
     assert c.v["x"] == "v=1"
     assert c.v["y"] == "v=2"
 
 
 def test_mapextractkey():
-    c = OmegaConf.create({"items": [{"n": "a"}, {"n": "b"}], "v": "${oc.mapextractkey:n,${items}}"})
+    c = OmegaConf.create(
+        {"items": [{"n": "a"}, {"n": "b"}], "v": "${oc.mapextractkey:n,${items}}"}
+    )
     assert list(c.v) == ["a", "b"]
 
 
 def test_mapcondtmpl():
-    c = OmegaConf.create({"a": ["foo", "bar", "baz"], "v": "${oc.mapcondtmpl:'^b.*','B=%','other=%',${a}}"})
+    c = OmegaConf.create(
+        {
+            "a": ["foo", "bar", "baz"],
+            "v": "${oc.mapcondtmpl:'^b.*','B=%','other=%',${a}}",
+        }
+    )
     result = list(c.v)
     assert result[0] == "other=foo"
     assert result[1] == "B=bar"
