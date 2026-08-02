@@ -142,6 +142,21 @@ step rather than round-tripping it through several hundred `++key=value`
 overrides. `JobPlan.parameters` still records those overrides, so a job remains
 reproducible from the command line.
 
+### Parallel resolution
+
+A sweep splits into independent dependency chains -- a stable stage and the
+cooldowns that branch off it must be resolved in order, but separate chains
+share nothing. `resolve_sweep_with_dag` hands those chains to a `fork` pool, so
+the workers inherit the loaded modules, the registered resolvers and the warm
+caches and start doing useful work immediately. Rendering job scripts fans out
+the same way.
+
+Resolution is pure CPU, so it scales with cores until the machine saturates.
+Set `HYDRA_STAGED_SWEEP_WORKERS` to pin the pool size: unset or `0` uses one
+worker per available CPU, `1` keeps everything in-process (useful when
+profiling or debugging). Platforms without `fork` fall back to in-process
+resolution.
+
 ## Security Note
 
 Sibling interpolation must be escaped in the original config because siblings are not available until after the first resolution pass.
