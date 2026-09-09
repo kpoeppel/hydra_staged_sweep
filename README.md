@@ -9,6 +9,7 @@ A generic library for managing parameter sweeps and staged configurations using 
 - **DAG Resolution**: Resolve dependencies between jobs (e.g., staged runs) using a DAG based on parameter matching.
 - **Pure OmegaConf**: Uses standard OmegaConf interpolations.
 - **Generic**: Works with any configuration schema that implements the `StagedSweepRoot` protocol.
+- **Fast**: Composition caches and a fork pool, so a large sweep is not dominated by re-composing the same config tree once per point (see [Performance](#performance)).
 
 ## Usage
 
@@ -112,6 +113,49 @@ for plan in plans:
     # plan.parameters contains the CLI overrides for this specific job
     # e.g. ["++learning_rate=0.0001", "++stage=stable", ...]
 ```
+
+## Performance
+
+Building a sweep composes the same config tree once per sweep point, and Hydra
+keeps nothing between `compose()` calls: without help, every point re-reads and
+re-parses the same YAML, re-walks the same defaults list, re-merges the same
+configs and re-parses the same interpolation and override strings.
+
+Two mechanisms remove that, both on by default and both leaving the resolved
+configs bit-for-bit identical:
+
+**Composition caches** (`config/cache.py`) — seven in-memory layers over Hydra
+and OmegaConf: a libyaml-backed YAML loader, parsed config files, config-group
+lookups, merged defaults lists, the Defaults List itself, interpolation parse
+trees, and override parses. Entries carry a `stat()` fingerprint and are
+revalidated on every lookup, so editing a config on disk invalidates exactly
+what depends on it. They install when `config/loader.py` is imported.
+
+```bash
+HYDRA_STAGED_SWEEP_CACHE=0   # turn every cache off
+```
+
+Staged sweeps additionally stop recomposing siblings: `resolve_sweep_with_dag`
+reuses the sibling's already-resolved config, builds the sibling context once
+per stage chain, and merges it into the composed config in one step instead of
+flattening it into several hundred `++key=value` overrides for Hydra to parse
+and apply one at a time. `JobPlan.parameters` still records those overrides, so
+a job stays reproducible from the command line.
+
+**Process pool** (`parallel.py`) — a sweep splits into independent dependency
+chains (a stable stage and the cooldowns branching off it must run in order, but
+separate chains share nothing), which are handed to a `fork` pool. Forking means
+workers inherit the loaded modules, the registered resolvers and the warm caches,
+so only each chain and its results cross the process boundary. The pool is
+skipped for small sweeps, where the process overhead dominates.
+
+```bash
+HYDRA_STAGED_SWEEP_WORKERS=8   # pin the pool size; 1 keeps everything in-process
+```
+
+Because plans cross a process boundary, this needs `compoconf>=0.2.2`: earlier
+releases cannot unpickle a worker's results (nested configs come back as plain
+dicts).
 
 ## Testing
 

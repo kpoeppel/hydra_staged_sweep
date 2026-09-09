@@ -7,6 +7,7 @@ import re
 from datetime import datetime, UTC
 from functools import lru_cache
 from math import sqrt as _sqrt
+from pathlib import Path
 from collections.abc import Mapping
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
@@ -200,6 +201,76 @@ def oc_if(a: str | int | bool, b: str, c: str):
         return b
 
 
+def oc_coalesce(*tokens, _root_):
+    """First of `tokens` that resolves to a non-None value. SQL COALESCE.
+
+        est_steps: ${oc.coalesce:backend.megatron.exit_interval,backend.megatron.train_iters}
+        est_steps: ${oc.coalesce:backend.megatron.exit_interval,1000}
+
+    WHY oc.select CANNOT DO THIS. `oc.select:path,default` falls back only when
+    the path is MISSING; a path that exists and holds None returns None.
+    Measured on omegaconf 2.3.0:
+
+        exit_interval: None  ->  ${oc.select:....exit_interval,${...train_iters}}  ==  None
+        exit_interval absent ->  same expression                                   ==  894000
+
+    Every field of a structured config EXISTS -- `exit_interval: int | None = None`
+    is present-and-None, never absent -- so oc.select never fires its default on
+    a structured schema, which is precisely the case you want to write.
+
+    ARGUMENTS ARE PATHS, NOT INTERPOLATIONS, and that is deliberate: it makes
+    this LAZY. Written as `${oc.coalesce:${a},${b}}` OmegaConf would resolve both
+    arguments before calling us, so a `${b}` that is missing or itself invalid
+    would raise even when `${a}` was perfectly good. Taking bare paths lets us
+    stop at the first hit and never look at the rest.
+
+    A token that does not resolve to anything is used as a LITERAL, so a plain
+    default still works as the last argument. The cost of that convenience is
+    that a string literal shaped like a config path resolves as one; pass such
+    values from a config key instead. Returns None if nothing resolves, which
+    keeps `${oc.coalesce:a,b}` safe to assign to an Optional field.
+    """
+    for token in tokens:
+        if token is None:
+            continue
+        key = str(token).strip()
+        if not key:
+            continue
+        value = OmegaConf.select(_root_, key, default=None)
+        if value is not None:
+            return value
+        # Not a resolvable path (or resolved to None): treat as a literal, but
+        # only if it cannot be a path at all -- otherwise a null config key would
+        # silently become the string "backend.megatron.exit_interval".
+        if not _LOOKS_LIKE_PATH.match(key):
+            return _coerce_scalar(key)
+    return None
+
+
+# A bare config path: dotted identifiers, optionally with [i] list indexing.
+_LOOKS_LIKE_PATH = re.compile(r"^[A-Za-z_][\w]*(\[\d+\]|\.[A-Za-z_][\w]*)*$")
+
+
+def _coerce_scalar(text: str):
+    """Turn a literal token into int/float/bool/None where it obviously is
+    one."""
+    lowered = text.lower()
+    if lowered in {"null", "none", "~"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
 def oc_eq(a: str | int | bool, b: str | int | bool):
     return a == b
 
@@ -224,6 +295,63 @@ def oc_leq(a: str | int | bool, b: str | int | bool):
     return a <= b
 
 
+def oc_slurmtime(seconds: int | float) -> str:
+    """Format a duration in seconds as SLURM's ``D-HH:MM:SS``."""
+    seconds = int(seconds)
+    sec = seconds % 60
+    minutes = (seconds // 60) % 60
+    hours = (seconds // 3600) % 24
+    days = seconds // (3600 * 24)
+    return f"{days}-{hours}:{minutes}:{sec}"
+
+
+def oc_exclude_nodes(path: str, sep: str = ",") -> str | None:
+    """Read a node-exclusion list file and return a SLURM nodelist string.
+
+    The file is expected to hold one node name per line; blank lines and lines
+    starting with ``#`` are ignored, and entries may also be comma- or
+    whitespace-separated within a line. Duplicates are dropped while preserving
+    first-seen order. The resulting nodes are joined with ``sep`` (default
+    ``","``) so the value can be dropped straight into ``#SBATCH --exclude=``.
+
+    A missing or effectively empty file yields ``None`` so the caller (e.g. the
+    sbatch directive builder) omits the ``--exclude`` directive entirely rather
+    than emitting an empty one.
+
+    This is registered with ``use_cache=False`` so each config resolution /
+    script generation re-reads the current on-disk list (it grows over time as
+    nodes are ruled out).
+    """
+    target = Path(str(path)).expanduser()
+    if not target.exists():
+        # WARN, do not fail. Returning None is correct -- a site with no list
+        # should not have an --exclude directive -- but staying silent about it
+        # is not: the list usually lives OUTSIDE the repo, so a moved, renamed or
+        # archived file, or an unmounted filesystem, turns into a large job
+        # submitted with NO exclusions at all, and nothing anywhere says so. A
+        # typo in the path looks identical to "we deliberately have no list".
+        LOGGER.warning(
+            "oc.exclude_nodes: %s does not exist -- no --exclude directive will be "
+            "emitted for this job. If a list was expected, check the path.",
+            target,
+        )
+        return None
+    nodes: list[str] = []
+    seen: set[str] = set()
+    for line in target.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        for token in re.split(r"[,\s]+", line):
+            token = token.strip()
+            if token and token not in seen:
+                seen.add(token)
+                nodes.append(token)
+    if not nodes:
+        return None
+    return sep.join(nodes)
+
+
 def _validate_eval_expression(expr: str) -> None:
     normalized = expr.replace(" ", "")
     if any(token in normalized for token in _FORBIDDEN_EVAL_TOKENS):
@@ -231,7 +359,13 @@ def _validate_eval_expression(expr: str) -> None:
 
 
 def _safe_eval(expr: str):
-    _validate_eval_expression(expr)
+    expr = str(expr)
+    try:
+        _validate_eval_expression(expr)
+    except Exception as exc:
+        # Name the expression: the raw failure says only which token was
+        # forbidden, which is useless when a sweep resolves hundreds of them.
+        raise type(exc)(f"{exc} (in oc.eval expression: {expr!r})") from exc
     return eval(expr)
 
 
@@ -259,6 +393,9 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.timestring", lambda: _timestring(), replace=True)
     OmegaConf.register_new_resolver("oc.len", len, replace=True)
     OmegaConf.register_new_resolver("oc.eval", _safe_eval, replace=True)  # noqa: S307
+    # use_cache=False: the whole point is to re-read the referenced keys, which
+    # sweep arms and CLI overrides change between resolutions.
+    OmegaConf.register_new_resolver("oc.coalesce", oc_coalesce, replace=True, use_cache=False)
     OmegaConf.register_new_resolver("oc.if", oc_if, replace=True)
     OmegaConf.register_new_resolver("oc.eq", oc_eq, replace=True)
     OmegaConf.register_new_resolver("oc.neq", oc_neq, replace=True)
@@ -276,6 +413,10 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.mapextractkey", oc_map_extract_key, replace=True)
     OmegaConf.register_new_resolver("oc.mapcondtmpl", oc_map_cond_template, replace=True)
     OmegaConf.register_new_resolver("oc.mapeval", oc_map_eval, replace=True)
+    OmegaConf.register_new_resolver("oc.slurmtime", oc_slurmtime, replace=True)
+    OmegaConf.register_new_resolver(
+        "oc.exclude_nodes", oc_exclude_nodes, replace=True, use_cache=False
+    )
 
     _REGISTRATION_SENTINEL["registered"] = True
 

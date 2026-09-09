@@ -210,3 +210,143 @@ def test_mapcondtmpl():
     assert result[0] == "other=foo"
     assert result[1] == "B=bar"
     assert result[2] == "B=baz"
+
+
+def test_slurmtime():
+    c = OmegaConf.create({"val": "${oc.slurmtime:3661}"})
+    assert c.val == "0-1:1:1"
+    c2 = OmegaConf.create({"val": "${oc.slurmtime:${oc.muli:25,3600}}"})
+    assert c2.val == "1-1:0:0"
+
+
+def test_exclude_nodes_reads_file(tmp_path):
+    listing = tmp_path / "exclude.txt"
+    # mix of comments, blank lines, and comma/space separated tokens
+    listing.write_text("# bad nodes\nnode0417\n\nnode0001, node0002\nnode0003 node0004\n")
+    c = OmegaConf.create({"nodes": f"${{oc.exclude_nodes:{listing}}}"})
+    assert c.nodes == "node0417,node0001,node0002,node0003,node0004"
+
+
+def test_exclude_nodes_dedups_preserving_order(tmp_path):
+    listing = tmp_path / "exclude.txt"
+    listing.write_text("node0417\nnode0001\nnode0417\n")
+    c = OmegaConf.create({"nodes": f"${{oc.exclude_nodes:{listing}}}"})
+    assert c.nodes == "node0417,node0001"
+
+
+def test_exclude_nodes_custom_separator(tmp_path):
+    listing = tmp_path / "exclude.txt"
+    listing.write_text("node01\nnode02\n")
+    c = OmegaConf.create({"nodes": f"${{oc.exclude_nodes:{listing},' '}}"})
+    assert c.nodes == "node01 node02"
+
+
+def test_exclude_nodes_missing_or_empty_file_is_none(tmp_path):
+    """None, not "": the caller omits --exclude rather than emitting an empty one."""
+    missing = tmp_path / "does_not_exist.txt"
+    empty = tmp_path / "empty.txt"
+    empty.write_text("# only comments\n\n")
+    c = OmegaConf.create(
+        {
+            "missing": f"${{oc.exclude_nodes:{missing}}}",
+            "empty": f"${{oc.exclude_nodes:{empty}}}",
+        }
+    )
+    resolved = OmegaConf.to_object(c)
+    assert resolved["missing"] is None
+    assert resolved["empty"] is None
+
+
+def test_exclude_nodes_is_not_cached(tmp_path):
+    """The list grows while jobs run, so every resolution must re-read it."""
+    listing = tmp_path / "exclude.txt"
+    listing.write_text("node01\n")
+    expr = f"${{oc.exclude_nodes:{listing}}}"
+    assert OmegaConf.to_object(OmegaConf.create({"n": expr}))["n"] == "node01"
+    listing.write_text("node01\nnode02\n")
+    assert OmegaConf.to_object(OmegaConf.create({"n": expr}))["n"] == "node01,node02"
+
+
+def test_coalesce_skips_present_but_none():
+    """The case oc.select cannot express: a key that exists and holds None."""
+    c = OmegaConf.create(
+        {
+            "a": None,
+            "b": 894000,
+            "val": "${oc.coalesce:a,b}",
+        }
+    )
+    assert c.val == 894000
+
+
+def test_coalesce_returns_first_non_none():
+    c = OmegaConf.create({"a": 1, "b": 2, "val": "${oc.coalesce:a,b}"})
+    assert c.val == 1
+
+
+def test_coalesce_falls_back_to_literal():
+    c = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,1000}"})
+    assert c.val == 1000
+    c2 = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,1.5}"})
+    assert c2.val == 1.5
+    c3 = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,'some/path'}"})
+    assert c3.val == "some/path"
+
+
+def test_coalesce_path_shaped_literal_is_read_as_a_path():
+    """The documented cost of the literal fallback.
+
+    A bare word is indistinguishable from a config path, so it is looked up
+    rather than returned. Pass such a default from a config key instead.
+    """
+    c = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,fallback}"})
+    assert OmegaConf.to_object(c)["val"] is None
+    c2 = OmegaConf.create({"a": None, "fallback": "x", "val": "${oc.coalesce:a,fallback}"})
+    assert c2.val == "x"
+
+
+def test_coalesce_all_none_is_none():
+    """Safe to assign to an Optional field."""
+    c = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,b.c}"})
+    assert OmegaConf.to_object(c)["val"] is None
+
+
+def test_coalesce_is_lazy_about_later_arguments():
+    """A path-shaped token that does not resolve must not raise, just be skipped."""
+    c = OmegaConf.create({"a": 5, "val": "${oc.coalesce:a,nothing.here.at.all}"})
+    assert c.val == 5
+
+
+def test_coalesce_reads_nested_paths():
+    c = OmegaConf.create(
+        {"backend": {"exit_interval": None, "train_iters": 42}},
+    )
+    c.val = "${oc.coalesce:backend.exit_interval,backend.train_iters}"
+    assert c.val == 42
+
+
+def test_eval_error_names_the_expression():
+    """A sweep resolves hundreds of expressions; the failure must say which."""
+    c = OmegaConf.create({"val": "${oc.eval:'__import__(\"os\")'}"})
+    with pytest.raises(Exception) as excinfo:
+        _ = c.val
+    assert "__import__" in str(excinfo.value)
+
+
+def test_coalesce_skips_null_and_empty_tokens():
+    c = OmegaConf.create({"a": 7, "val": "${oc.coalesce:null,'',a}"})
+    assert c.val == 7
+
+
+def test_coerce_scalar_literals():
+    """Quoted literals bypass the path check, so every branch is reachable."""
+    from hydra_staged_sweep.config.resolvers import _coerce_scalar
+
+    assert _coerce_scalar("null") is None
+    assert _coerce_scalar("None") is None
+    assert _coerce_scalar("~") is None
+    assert _coerce_scalar("true") is True
+    assert _coerce_scalar("False") is False
+    assert _coerce_scalar("42") == 42
+    assert _coerce_scalar("1.5") == 1.5
+    assert _coerce_scalar("some/path") == "some/path"
