@@ -63,7 +63,8 @@ def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
 
 
 def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ...]:
-    """Build a matching key that ignores globally stage-flagged path segments."""
+    """Build a matching key that ignores globally stage-flagged path
+    segments."""
     return tuple(
         group_idx
         for group_idx, is_stage in zip_longest(

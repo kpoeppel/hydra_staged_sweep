@@ -77,7 +77,9 @@ def test_resolve_sweep_with_dict_sweep():
         config_dir=str(config_dir),
     )
 
-    plans = resolve_sweep_with_dag(config, points, setup, config_class=EdgeCaseTestConfig)
+    plans = resolve_sweep_with_dag(
+        config, points, setup, config_class=EdgeCaseTestConfig
+    )
 
     assert len(plans) == 1
     assert plans[0].sibling_pattern is None

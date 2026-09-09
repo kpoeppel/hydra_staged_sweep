@@ -259,7 +259,8 @@ _LOOKS_LIKE_PATH = re.compile(r"^[A-Za-z_][\w]*(\[\d+\]|\.[A-Za-z_][\w]*)*$")
 
 
 def _coerce_scalar(text: str):
-    """Turn a literal token into int/float/bool/None where it obviously is one."""
+    """Turn a literal token into int/float/bool/None where it obviously is
+    one."""
     lowered = text.lower()
     if lowered in {"null", "none", "~"}:
         return None
@@ -403,7 +404,9 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.eval", _safe_eval, replace=True)  # noqa: S307
     # use_cache=False: the whole point is to re-read the referenced keys, which
     # sweep arms and CLI overrides change between resolutions.
-    OmegaConf.register_new_resolver("oc.coalesce", oc_coalesce, replace=True, use_cache=False)
+    OmegaConf.register_new_resolver(
+        "oc.coalesce", oc_coalesce, replace=True, use_cache=False
+    )
     OmegaConf.register_new_resolver("oc.if", oc_if, replace=True)
     OmegaConf.register_new_resolver("oc.eq", oc_eq, replace=True)
     OmegaConf.register_new_resolver("oc.neq", oc_neq, replace=True)

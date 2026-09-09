@@ -288,9 +288,10 @@ def test_no_sweep_yields_a_single_point():
 def test_plain_dict_sweep_yields_a_single_point():
     """A config whose `sweep` key survived as a plain mapping.
 
-    Hydra hands back a dict for a `sweep:` block that never went through the SweepConfig
-    schema (an empty block, or one from a root config that does not declare the field).
-    Treated as "no sweep" rather than crashing on the attribute access that follows.
+    Hydra hands back a dict for a `sweep:` block that never went through
+    the SweepConfig schema (an empty block, or one from a root config
+    that does not declare the field). Treated as "no sweep" rather than
+    crashing on the attribute access that follows.
     """
     points = expand_sweep({})
     assert len(points) == 1

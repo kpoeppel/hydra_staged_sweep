@@ -1,8 +1,8 @@
 """Tests for defensive code branches in expander.py.
 
-Some code branches exist as defensive programming to handle edge cases that shouldn't
-occur with the current implementation but provide safety if the code logic changes in
-the future.
+Some code branches exist as defensive programming to handle edge cases
+that shouldn't occur with the current implementation but provide safety
+if the code logic changes in the future.
 """
 
 from hydra_staged_sweep.expander import _cartesian_product_groups

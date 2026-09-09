@@ -251,7 +251,9 @@ def test_slurmtime():
 def test_exclude_nodes_reads_file(tmp_path):
     listing = tmp_path / "exclude.txt"
     # mix of comments, blank lines, and comma/space separated tokens
-    listing.write_text("# bad nodes\nnode0417\n\nnode0001, node0002\nnode0003 node0004\n")
+    listing.write_text(
+        "# bad nodes\nnode0417\n\nnode0001, node0002\nnode0003 node0004\n"
+    )
     c = OmegaConf.create({"nodes": f"${{oc.exclude_nodes:{listing}}}"})
     assert c.nodes == "node0417,node0001,node0002,node0003,node0004"
 
@@ -271,7 +273,8 @@ def test_exclude_nodes_custom_separator(tmp_path):
 
 
 def test_exclude_nodes_missing_or_empty_file_is_none(tmp_path):
-    """None, not "": the caller omits --exclude rather than emitting an empty one."""
+    """None, not "": the caller omits --exclude rather than emitting an empty
+    one."""
     missing = tmp_path / "does_not_exist.txt"
     empty = tmp_path / "empty.txt"
     empty.write_text("# only comments\n\n")
@@ -325,12 +328,15 @@ def test_coalesce_falls_back_to_literal():
 def test_coalesce_path_shaped_literal_is_read_as_a_path():
     """The documented cost of the literal fallback.
 
-    A bare word is indistinguishable from a config path, so it is looked up rather than
-    returned. Pass such a default from a config key instead.
+    A bare word is indistinguishable from a config path, so it is looked
+    up rather than returned. Pass such a default from a config key
+    instead.
     """
     c = OmegaConf.create({"a": None, "val": "${oc.coalesce:a,fallback}"})
     assert OmegaConf.to_object(c)["val"] is None
-    c2 = OmegaConf.create({"a": None, "fallback": "x", "val": "${oc.coalesce:a,fallback}"})
+    c2 = OmegaConf.create(
+        {"a": None, "fallback": "x", "val": "${oc.coalesce:a,fallback}"}
+    )
     assert c2.val == "x"
 
 
@@ -341,7 +347,8 @@ def test_coalesce_all_none_is_none():
 
 
 def test_coalesce_is_lazy_about_later_arguments():
-    """A path-shaped token that does not resolve must not raise, just be skipped."""
+    """A path-shaped token that does not resolve must not raise, just be
+    skipped."""
     c = OmegaConf.create({"a": 5, "val": "${oc.coalesce:a,nothing.here.at.all}"})
     assert c.val == 5
 

@@ -33,8 +33,8 @@ class SweepConfig(ConfigInterface):
 class StagedSweepRoot(ConfigInterface):
     """Minimal interface expected by hydra_staged_sweep.
 
-    External applications should inherit from this or define a compatible structure that
-    includes these fields.
+    External applications should inherit from this or define a
+    compatible structure that includes these fields.
     """
 
     sweep: SweepConfig = field(default_factory=SweepConfig)
