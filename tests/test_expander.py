@@ -275,3 +275,24 @@ def test_list_composition_with_list_value():
 
     # List values are flattened when accumulated (fixed behavior)
     assert points[0].parameters["subconfig"] == ["a", "b", "c"]
+
+
+def test_no_sweep_yields_a_single_point():
+    """`sweep: None` means "run this config once"."""
+    points = expand_sweep(None)
+    assert len(points) == 1
+    assert points[0].index == 0
+    assert points[0].parameters == []
+
+
+def test_plain_dict_sweep_yields_a_single_point():
+    """A config whose `sweep` key survived as a plain mapping.
+
+    Hydra hands back a dict for a `sweep:` block that never went through
+    the SweepConfig schema (an empty block, or one from a root config
+    that does not declare the field). Treated as "no sweep" rather than
+    crashing on the attribute access that follows.
+    """
+    points = expand_sweep({})
+    assert len(points) == 1
+    assert points[0].parameters == []

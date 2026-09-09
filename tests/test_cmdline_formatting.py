@@ -33,6 +33,19 @@ def test_param_to_cmdlines_list_of_strings_single():
     assert result == ["++subconfig=[a]"]
 
 
+def test_param_to_cmdlines_list_with_interpolations():
+    """Hydra's ``[a,b]`` literal grammar cannot carry an interpolation.
+
+    A list element holding ``${...}`` falls through to the placeholder plus
+    dotted-path form instead, which Hydra parses and OmegaConf resolves later.
+    """
+    result = param_to_cmdlines("paths", ["${a.b}", "plain"], prefix="++")
+
+    assert result[0] == "++paths=[0,1]"
+    assert '++paths.0="${a.b}"' in result
+    assert '++paths.1="plain"' in result
+
+
 def test_param_to_cmdlines_dict():
     """Test formatting a dict parameter (falls through to
     config_to_cmdline)."""

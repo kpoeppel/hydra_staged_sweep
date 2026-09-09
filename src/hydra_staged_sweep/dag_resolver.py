@@ -24,7 +24,7 @@ import networkx as nx
 from compoconf import asdict
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
-from .config.schema import StagedSweepRoot, ConfigSetup
+from .config.schema import StagedSweepRoot, SweepConfig, ConfigSetup
 from .config.loader import load_config_reference
 from .expander import SweepPoint
 from .parallel import run_chunks, worker_count
@@ -144,7 +144,7 @@ def _collect_group_filters(
     cursor = 0
 
     def walk(group_list: list[dict[str, Any]]) -> None:
-        nonlocal cursor, filters  # noqa: F824
+        nonlocal cursor, filters
         for group_idx, group in enumerate(group_list):
             if cursor >= len(group_path):
                 raise ValueError("Group path does not match sweep groups.")
@@ -378,6 +378,11 @@ def param_to_cmdlines(
         val = val.replace('"', '\\"')
         return [f'{prefix}{key}="{val}"']
     elif isinstance(val, list) and all(isinstance(item, str) for item in val):
+        if any("$" in item for item in val):
+            # Items contain OmegaConf interpolations; Hydra's [a,b] literal grammar
+            # can't represent them. Fall through to the placeholder + dotted-path
+            # pattern (key=[0,1,...], key.0=val0, ...) implemented in dict_to_cmdlines.
+            return config_to_cmdline(val, override=prefix or "++", prefix=key)
         # Format as Hydra config group list: subconfig=[a,b]
         list_str = "[" + ",".join(val) + "]"
         return [f"{prefix}{key}={list_str}"]
@@ -599,7 +604,7 @@ def resolve_sweep_with_dag(
     }
     sweep_filter_expr = config.sweep.filter if config.sweep else True
 
-    if config.sweep is None:
+    if not isinstance(config.sweep, SweepConfig):
         point = points_dict[list(points_dict)[0]]
         resolved = load_config_reference(
             config_dir=config_setup.config_dir,

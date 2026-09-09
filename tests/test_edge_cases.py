@@ -57,6 +57,34 @@ def test_resolve_sweep_with_none_sweep():
     assert plans[0].sibling_pattern is None
 
 
+def test_resolve_sweep_with_dict_sweep():
+    """A `sweep` left as a plain mapping takes the same no-sweep path.
+
+    The branch tests for a SweepConfig rather than for None, because a `sweep:`
+    block that never went through the schema arrives as a dict and would
+    otherwise crash on `config.sweep.groups`.
+    """
+    config_dir = Path(__file__).parent / "configs" / "defaults_test"
+
+    config = EdgeCaseTestConfig()
+    config.sweep = {}
+
+    points = [SweepPoint(index=0, parameters={})]
+
+    setup = ConfigSetup(
+        pwd=str(config_dir),
+        config_name="config",
+        config_dir=str(config_dir),
+    )
+
+    plans = resolve_sweep_with_dag(
+        config, points, setup, config_class=EdgeCaseTestConfig
+    )
+
+    assert len(plans) == 1
+    assert plans[0].sibling_pattern is None
+
+
 def test_config_group_detected_with_actual_directory():
     """Integration test ensuring config group detection works in full
     resolution."""
