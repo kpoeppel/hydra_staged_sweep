@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from functools import lru_cache
 from math import sqrt as _sqrt
 from pathlib import Path
@@ -141,7 +141,7 @@ def _dict_merge(*mappings):
 
 @lru_cache
 def _timestring():
-    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")[:-3]
 
 
 def oc_join(concat: str, args: list[str]) -> str:
