@@ -19,14 +19,18 @@ class TestConfig(StagedSweepRoot):
 
 
 def test_list_composition_end_to_end():
-    """Test list composition from sweep expansion through command-line generation."""
+    """Test list composition from sweep expansion through command-line
+    generation."""
     config = TestConfig(
         sweep=SweepConfig(
             type="product",
             groups=[
                 {"params": {"plugins": ["logger", "wandb"]}},  # 2 values
                 {
-                    "params": {"plugins": ["tensorboard"], "learning_rate": [0.001, 0.01]}
+                    "params": {
+                        "plugins": ["tensorboard"],
+                        "learning_rate": [0.001, 0.01],
+                    }
                 },  # 1 * 2 = 2
             ],
             list_composition=["plugins"],
@@ -130,7 +134,8 @@ def test_list_composition_multiple_params():
 
 
 def test_list_composition_partial():
-    """Test that only specified parameters are accumulated, others are overridden."""
+    """Test that only specified parameters are accumulated, others are
+    overridden."""
     config = TestConfig(
         sweep=SweepConfig(
             type="product",

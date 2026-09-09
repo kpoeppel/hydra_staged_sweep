@@ -37,7 +37,10 @@ def test_composable_nested_groups():
     config = SweepConfig(
         type="list",
         groups=[
-            {"type": "product", "groups": [{"params": {"a": [1]}}, {"params": {"b": [2, 3]}}]},
+            {
+                "type": "product",
+                "groups": [{"params": {"a": [1]}}, {"params": {"b": [2, 3]}}],
+            },
             {"params": {"a": [4], "b": [5]}},
         ],
         base_values={},
@@ -70,7 +73,9 @@ def test_group_defaults():
 
 def test_composable_list_configs():
     config = SweepConfig(
-        type="list", groups=[{"configs": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}], base_values={}
+        type="list",
+        groups=[{"configs": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}],
+        base_values={},
     )
     points = expand_sweep(config)
     assert len(points) == 2
@@ -82,7 +87,10 @@ def test_list_composition_basic():
     """Test basic list composition in product mode."""
     config = SweepConfig(
         type="product",
-        groups=[{"params": {"subconfig": ["a", "b"]}}, {"params": {"subconfig": ["c", "d"]}}],
+        groups=[
+            {"params": {"subconfig": ["a", "b"]}},
+            {"params": {"subconfig": ["c", "d"]}},
+        ],
         list_composition=["subconfig"],
     )
     points = expand_sweep(config)
@@ -175,7 +183,8 @@ def test_list_composition_empty():
 
 
 def test_list_composition_in_list_mode():
-    """Test that list composition in list mode only affects each group individually."""
+    """Test that list composition in list mode only affects each group
+    individually."""
     config = SweepConfig(
         type="list",
         groups=[{"params": {"subconfig": ["a"]}}, {"params": {"subconfig": ["b"]}}],
@@ -217,7 +226,10 @@ def test_list_composition_nested_groups():
             {"params": {"subconfig": ["a"]}},
             {
                 "type": "product",
-                "groups": [{"params": {"subconfig": ["b"]}}, {"params": {"subconfig": ["c"]}}],
+                "groups": [
+                    {"params": {"subconfig": ["b"]}},
+                    {"params": {"subconfig": ["c"]}},
+                ],
             },
         ],
         list_composition=["subconfig"],

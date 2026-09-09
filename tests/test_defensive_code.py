@@ -9,7 +9,8 @@ from hydra_staged_sweep.expander import _cartesian_product_groups
 
 
 def test_list_composition_always_initializes_as_list():
-    """Document that list_composition parameters are always initialized as lists.
+    """Document that list_composition parameters are always initialized as
+    lists.
 
     This test documents the behavior that makes line 269 unreachable:
     When a key is in list_composition and not yet in merged_params, it's
@@ -40,8 +41,8 @@ def test_list_composition_always_initializes_as_list():
 
 
 def test_list_composition_initialization_order():
-    """Verify that list_composition handles initialization correctly regardless of
-    order."""
+    """Verify that list_composition handles initialization correctly regardless
+    of order."""
     # Even if the first group doesn't have the list_composition key,
     # it should work when subsequent groups add it
 
@@ -85,7 +86,8 @@ def test_defensive_branch_simulation():
 
 
 def test_list_composition_empty_initialization():
-    """Verify that list_composition initializes correctly when first encountered."""
+    """Verify that list_composition initializes correctly when first
+    encountered."""
     # Need at least 2 groups to trigger the merging logic
     groups = [
         [({"other": "value"}, (0,), (False,))],  # First group without the key

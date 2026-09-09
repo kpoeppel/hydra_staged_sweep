@@ -136,7 +136,9 @@ def test_resolve_filter_from_context_non_dict(monkeypatch):
     def fake_to_container(*args, **kwargs):
         return []
 
-    monkeypatch.setattr("hydra_staged_sweep.dag_resolver.OmegaConf.to_container", fake_to_container)
+    monkeypatch.setattr(
+        "hydra_staged_sweep.dag_resolver.OmegaConf.to_container", fake_to_container
+    )
     with pytest.raises(ValueError, match="sweep.filter must resolve to a bool"):
         _resolve_filter_from_context("${oc.eval:'True'}", {})
 
@@ -166,7 +168,10 @@ def test_collect_group_filters_nested_configs():
 
 def test_collect_group_filters_nested_groups():
     groups = [
-        {"type": "product", "groups": [{"type": "product", "params": {"a": [1]}, "filter": "f2"}]}
+        {
+            "type": "product",
+            "groups": [{"type": "product", "params": {"a": [1]}, "filter": "f2"}],
+        }
     ]
     assert _collect_group_filters(groups, (0, 0, 0)) == ["f2"]
 
@@ -203,7 +208,9 @@ def test_collect_group_filters_configs_out_of_range():
 
 def test_collect_group_filters_invalid_group():
     groups = [{"type": "product", "invalid": True}]
-    with pytest.raises(ValueError, match="Group must have 'groups', 'params', or 'configs'"):
+    with pytest.raises(
+        ValueError, match="Group must have 'groups', 'params', or 'configs'"
+    ):
         _collect_group_filters(groups, (0,))
 
 

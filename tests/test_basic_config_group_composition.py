@@ -75,22 +75,30 @@ def test_basic_config_expansion():
         assert isinstance(basic, list), f"basic should be a list, got {type(basic)}"
 
         # Should have 2 elements (one from each group)
-        assert len(basic) == 2, f"basic should have 2 elements, got {len(basic)}: {basic}"
+        assert len(basic) == 2, (
+            f"basic should have 2 elements, got {len(basic)}: {basic}"
+        )
 
         # IMPORTANT: After fix, all elements should be strings, not nested lists
         # Currently fails: basic=['integrate_a1', ['integrate_b1']]
         # Should be: basic=['integrate_a1', 'integrate_b1']
         for elem in basic:
-            assert isinstance(elem, str), f"Elements should be strings, got {type(elem)}: {elem}"
+            assert isinstance(elem, str), (
+                f"Elements should be strings, got {type(elem)}: {elem}"
+            )
 
 
 def test_basic_config_hydra_resolution():
-    """Test that Hydra resolution works when using proper overrides (without ++)."""
-    pytest.skip("Will be implemented after fixing nested lists and override prefix logic")
+    """Test that Hydra resolution works when using proper overrides (without
+    ++)."""
+    pytest.skip(
+        "Will be implemented after fixing nested lists and override prefix logic"
+    )
 
 
 def test_what_command_lines_would_be_generated():
-    """Show what command-line overrides would be generated (before Hydra rejects them).
+    """Show what command-line overrides would be generated (before Hydra
+    rejects them).
 
     This helps understand what the sweep is trying to do.
     """

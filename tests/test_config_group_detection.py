@@ -190,7 +190,8 @@ def test_param_to_cmdlines_bool_value():
 
 
 def test_param_to_cmdlines_list_with_non_strings():
-    """Test that lists with non-string items are passed to config_to_cmdline."""
+    """Test that lists with non-string items are passed to
+    config_to_cmdline."""
     result = param_to_cmdlines("numbers", [1, 2, 3], prefix="++")
 
     # Should handle as complex value, not as string list

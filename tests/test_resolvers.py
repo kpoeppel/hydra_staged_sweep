@@ -205,26 +205,35 @@ def test_mapkeytmpl():
 
 
 def test_mapkeyvaltmpl():
-    c = OmegaConf.create({"d": {"a": "1", "b": "2"}, "v": "${oc.mapkeyvaltmpl:'%k=%v',${d}}"})
+    c = OmegaConf.create(
+        {"d": {"a": "1", "b": "2"}, "v": "${oc.mapkeyvaltmpl:'%k=%v',${d}}"}
+    )
     result = list(c.v)
     assert "a=1" in result
     assert "b=2" in result
 
 
 def test_mapvaltmpl():
-    c = OmegaConf.create({"d": {"x": "1", "y": "2"}, "v": "${oc.mapvaltmpl:'v=%v',${d}}"})
+    c = OmegaConf.create(
+        {"d": {"x": "1", "y": "2"}, "v": "${oc.mapvaltmpl:'v=%v',${d}}"}
+    )
     assert c.v["x"] == "v=1"
     assert c.v["y"] == "v=2"
 
 
 def test_mapextractkey():
-    c = OmegaConf.create({"items": [{"n": "a"}, {"n": "b"}], "v": "${oc.mapextractkey:n,${items}}"})
+    c = OmegaConf.create(
+        {"items": [{"n": "a"}, {"n": "b"}], "v": "${oc.mapextractkey:n,${items}}"}
+    )
     assert list(c.v) == ["a", "b"]
 
 
 def test_mapcondtmpl():
     c = OmegaConf.create(
-        {"a": ["foo", "bar", "baz"], "v": "${oc.mapcondtmpl:'^b.*','B=%','other=%',${a}}"}
+        {
+            "a": ["foo", "bar", "baz"],
+            "v": "${oc.mapcondtmpl:'^b.*','B=%','other=%',${a}}",
+        }
     )
     result = list(c.v)
     assert result[0] == "other=foo"

@@ -68,7 +68,9 @@ def test_parse_config_exception():
         ):
             load_config_reference(
                 config_path=str(config_path),
-                overrides=["other_field=changed"],  # Pass overrides to go through that path
+                overrides=[
+                    "other_field=changed"
+                ],  # Pass overrides to go through that path
                 config_class=StrictConfig,
             )
 
@@ -115,7 +117,10 @@ def test_multiple_siblings_warning_log(caplog):
         # p0 MUST have a sibling reference to trigger the find_sibling logic
         p0 = SweepPoint(
             index=0,
-            parameters={"stage": "base", "ref": "${sibling.train.x}"},  # Has sibling reference
+            parameters={
+                "stage": "base",
+                "ref": "${sibling.train.x}",
+            },  # Has sibling reference
             group_path=(0, 0),
             stage_path=(False, True),
         )
@@ -141,7 +146,9 @@ def test_multiple_siblings_warning_log(caplog):
 
         # Verify warning was logged
         assert result is not None
-        assert any("Multiple matched siblings" in str(record.msg) for record in caplog.records)
+        assert any(
+            "Multiple matched siblings" in str(record.msg) for record in caplog.records
+        )
 
 
 def test_build_dag_valueerror_exception():
@@ -149,7 +156,9 @@ def test_build_dag_valueerror_exception():
     from unittest.mock import patch  # noqa
     from hydra_staged_sweep.dag_resolver import build_dependency_dag_from_points
 
-    with patch("hydra_staged_sweep.dag_resolver.find_sibling_by_group_path") as mock_find:
+    with patch(
+        "hydra_staged_sweep.dag_resolver.find_sibling_by_group_path"
+    ) as mock_find:
         mock_find.side_effect = ValueError("Test error")
 
         p0 = SweepPoint(
@@ -181,7 +190,9 @@ def test_resolve_sweep_dict_input():
         setup = ConfigSetup(pwd=".", config_path=str(config_path), config_dir=tmpdir)
 
         # Pass points as dict (line 211 is the else branch)
-        points_dict = {0: SweepPoint(index=0, parameters={}, group_path=(0,), stage_path=(False,))}
+        points_dict = {
+            0: SweepPoint(index=0, parameters={}, group_path=(0,), stage_path=(False,))
+        }
 
         plans = resolve_sweep_with_dag(config, points_dict, setup)
         assert len(plans) == 1

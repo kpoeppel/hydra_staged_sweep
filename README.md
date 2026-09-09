@@ -5,8 +5,8 @@ A generic library for managing parameter sweeps and staged configurations using 
 ## Features
 
 - **Parameter Sweeps**: Define grid or composable sweeps in your configuration.
-- **Staged Configuration**: Support for multi-stage experiments (e.g., burn-in, stable, decay) via `sibling` references.
-- **DAG Resolution**: Resolve dependencies between jobs (e.g., staged runs) using a DAG based on parameter matching.
+- **Staged Configuration**: Support for multi-stage experiments (for example, burn-in, stable, decay) by way of `sibling` references.
+- **DAG Resolution**: Resolve dependencies between jobs (for example, staged runs) using a DAG based on parameter matching.
 - **Pure OmegaConf**: Uses standard OmegaConf interpolations.
 - **Generic**: Works with any configuration schema that implements the `StagedSweepRoot` protocol.
 - **Fast**: Composition caches and a fork pool, so a large sweep is not dominated by re-composing the same config tree once per point (see [Performance](#performance)).
@@ -15,7 +15,7 @@ A generic library for managing parameter sweeps and staged configurations using 
 
 ### 1. Configuration (YAML)
 
-Create a configuration file (e.g., `conf/config.yaml`) that defines your sweep and stages.
+Create a configuration file (for example, `conf/config.yaml`) that defines your sweep and stages.
 
 ```yaml
 # conf/config.yaml
@@ -111,7 +111,7 @@ for plan in plans:
         print(f"  Dependency: Loading from {cfg.load_path}")
 
     # plan.parameters contains the CLI overrides for this specific job
-    # e.g. ["++learning_rate=0.0001", "++stage=stable", ...]
+    # for example ["++learning_rate=0.0001", "++stage=stable", ...]
 ```
 
 ## Performance
@@ -168,6 +168,42 @@ Run the tests using `pytest`:
 ```bash
 PYTHONPATH=src pytest tests/
 ```
+
+## Performance
+
+Building a sweep composes the same config tree once per sweep point, and Hydra
+keeps nothing between `compose()` calls. `hydra_staged_sweep.config.cache`
+installs in-memory caches for the parts that repeat -- parsed config files,
+config-group lookups, merged defaults lists, and the ANTLR parse trees for
+interpolations and command-line overrides -- and backs OmegaConf's YAML loader
+with libyaml where available. Entries are revalidated with `stat()` on every
+lookup, so editing a config on disk invalidates exactly the entries that depend
+on it; composition results are unchanged.
+
+The caches are installed automatically when `hydra_staged_sweep.config.loader`
+is imported. Set `HYDRA_STAGED_SWEEP_CACHE=0` to turn them off, or call
+`cache.disable()`. `cache.stats()` reports hit/miss counters per layer.
+
+Staged sweeps additionally reuse each sibling's already-resolved config instead
+of recomposing it, and merge the sibling context into the composed config in one
+step rather than round-tripping it through several hundred `++key=value`
+overrides. `JobPlan.parameters` still records those overrides, so a job remains
+reproducible from the command line.
+
+### Parallel resolution
+
+A sweep splits into independent dependency chains -- a stable stage and the
+cooldowns that branch off it must be resolved in order, but separate chains
+share nothing. `resolve_sweep_with_dag` hands those chains to a `fork` pool, so
+the workers inherit the loaded modules, the registered resolvers and the warm
+caches and start doing useful work immediately. Rendering job scripts fans out
+the same way.
+
+Resolution is pure CPU, so it scales with cores until the machine saturates.
+Set `HYDRA_STAGED_SWEEP_WORKERS` to pin the pool size: unset or `0` uses one
+worker per available CPU, `1` keeps everything in-process (useful when
+profiling or debugging). Platforms without `fork` fall back to in-process
+resolution.
 
 ## Security Note
 

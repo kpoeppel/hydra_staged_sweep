@@ -13,7 +13,8 @@ class VarClass(NonStrictDataclass):
 
 def test_load_config1():
     cfg = load_config_reference(
-        config_path=Path(__file__).parent / "configs" / "test1.yaml", config_class=VarClass
+        config_path=Path(__file__).parent / "configs" / "test1.yaml",
+        config_class=VarClass,
     )
     assert cfg.a == 1
     assert cfg.b is None

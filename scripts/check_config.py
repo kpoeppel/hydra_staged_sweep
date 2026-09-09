@@ -37,7 +37,9 @@ def main():
     )
 
     points = expand_sweep(root_config.sweep)
-    plans = resolve_sweep_with_dag(root_config, points, config_setup, config_class=DummyRootConfig)
+    plans = resolve_sweep_with_dag(
+        root_config, points, config_setup, config_class=DummyRootConfig
+    )
     # print(plans)
     for plan in plans:
         print({key: val for key, val in asdict(plan.config).items() if key != "sweep"})

@@ -38,7 +38,10 @@ def test_resolve_circular_dependency():
 def test_build_dag_warning(caplog):
     # Case where sibling pattern exists but no sibling found
     p = SweepPoint(
-        index=0, parameters={"ref": "${sibling.missing.x}"}, group_path=(0,), stage_path=(True,)
+        index=0,
+        parameters={"ref": "${sibling.missing.x}"},
+        group_path=(0,),
+        stage_path=(True,),
     )
     build_dependency_dag_from_points({0: p})
     assert "No sibling found for requested stage_pattern: missing" in caplog.text

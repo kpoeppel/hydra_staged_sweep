@@ -66,7 +66,9 @@ def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ..
     """Build a matching key that ignores globally stage-flagged path segments."""
     return tuple(
         group_idx
-        for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False)
+        for group_idx, is_stage in zip_longest(
+            point.group_path, stage_mask, fillvalue=False
+        )
         if not is_stage
     )
 
@@ -101,7 +103,9 @@ def _build_sibling_index(points: Mapping[int, SweepPoint]) -> SiblingIndex:
     )
 
 
-def _resolve_filter_from_context(filter_expr: Any, context: Mapping[str, Any] | Callable) -> bool:
+def _resolve_filter_from_context(
+    filter_expr: Any, context: Mapping[str, Any] | Callable
+) -> bool:
     """Evaluate one filter expression.
 
     ``context`` may be a zero-argument callable, which is only invoked for
@@ -167,7 +171,9 @@ def _collect_group_filters(
                     raise ValueError("Group path does not match sweep groups.")
                 config_dict = configs[config_idx]
                 if isinstance(config_dict, dict) and (
-                    "groups" in config_dict or "params" in config_dict or "configs" in config_dict
+                    "groups" in config_dict
+                    or "params" in config_dict
+                    or "configs" in config_dict
                 ):
                     walk([config_dict])
             else:
@@ -187,7 +193,9 @@ def find_sibling_by_group_path(
 ) -> SweepPoint | None:
     """Find sibling with matching hyperparameters."""
     points_dict = (
-        all_points if isinstance(all_points, Mapping) else {p.index: p for p in all_points}
+        all_points
+        if isinstance(all_points, Mapping)
+        else {p.index: p for p in all_points}
     )
     index = sibling_index or _build_sibling_index(points_dict)
 
@@ -269,8 +277,12 @@ def config_to_cmdline(
                 newprefix = (prefix + "." if prefix else "") + sub_cfg
                 cmdlines += dict_to_cmdlines(dct[sub_cfg], prefix=newprefix)
 
-        elif isinstance(dct, (list, ListConfig, Sequence)) and not isinstance(dct, (str, bytes)):
-            cmdlines.append(override + prefix + "=[" + ",".join(map(str, range(len(dct)))) + "]")
+        elif isinstance(dct, (list, ListConfig, Sequence)) and not isinstance(
+            dct, (str, bytes)
+        ):
+            cmdlines.append(
+                override + prefix + "=[" + ",".join(map(str, range(len(dct)))) + "]"
+            )
             for n, sub_cfg in enumerate(dct):
                 cmdlines += dict_to_cmdlines(
                     sub_cfg,
@@ -292,7 +304,8 @@ def config_to_cmdline(
 
 
 def drop_cmdline_invisible(value: Any) -> Any:
-    """Strip what ``config_to_cmdline`` cannot express, so a direct merge matches it.
+    """Strip what ``config_to_cmdline`` cannot express, so a direct merge
+    matches it.
 
     An empty mapping flattens to zero overrides, so round-tripping a config
     through the command line silently drops it -- and a list element that is an
@@ -307,7 +320,9 @@ def drop_cmdline_invisible(value: Any) -> Any:
             for key, item in pruned.items()
             if not (isinstance(item, Mapping) and not item)
         }
-    if isinstance(value, (list, ListConfig, Sequence)) and not isinstance(value, (str, bytes)):
+    if isinstance(value, (list, ListConfig, Sequence)) and not isinstance(
+        value, (str, bytes)
+    ):
         out = []
         for index, item in enumerate(value):
             pruned = drop_cmdline_invisible(item)
@@ -342,7 +357,9 @@ def is_config_group(key: str, config_dir: str | Path | None) -> bool:
     return False
 
 
-def param_to_cmdlines(key: str, val: Any, prefix: str = "", config_dir: str | Path | None = None):
+def param_to_cmdlines(
+    key: str, val: Any, prefix: str = "", config_dir: str | Path | None = None
+):
     """Convert a parameter to command-line overrides.
 
     Args:
@@ -379,8 +396,8 @@ def param_to_cmdlines(key: str, val: Any, prefix: str = "", config_dir: str | Pa
 class _LazyFilterContext:
     """Build the filter context only when a filter actually reads it.
 
-    Flattening a resolved config is not cheap, and a filter that is already a bool never
-    looks at the context.
+    Flattening a resolved config is not cheap, and a filter that is
+    already a bool never looks at the context.
     """
 
     def __init__(self, resolved: Any) -> None:
@@ -390,7 +407,9 @@ class _LazyFilterContext:
     def __call__(self) -> dict[str, Any]:
         if self._context is None:
             self._context = {
-                key: value for key, value in asdict(self._resolved).items() if key not in ("sweep")
+                key: value
+                for key, value in asdict(self._resolved).items()
+                if key not in ("sweep")
             }
         return self._context
 
@@ -405,9 +424,14 @@ _CHAIN_CONTEXT: tuple | None = None
 def _resolve_chain(chain: list[int]) -> tuple[dict[int, JobPlan], dict[int, bool]]:
     """Resolve one dependency chain, in the order given."""
     assert _CHAIN_CONTEXT is not None, "chain context not initialised"
-    (config, points_dict, config_setup, config_class, sibling_index, sweep_filter_expr) = (
-        _CHAIN_CONTEXT
-    )
+    (
+        config,
+        points_dict,
+        config_setup,
+        config_class,
+        sibling_index,
+        sweep_filter_expr,
+    ) = _CHAIN_CONTEXT
 
     resolved_jobs: dict[int, JobPlan] = {}
     filtered_jobs: dict[int, bool] = {}
@@ -416,9 +440,13 @@ def _resolve_chain(chain: list[int]) -> tuple[dict[int, JobPlan], dict[int, bool
     for point_idx in chain:
         point = points_dict[point_idx]
         try:
-            group_filters = _collect_group_filters(config.sweep.groups, point.group_path)
+            group_filters = _collect_group_filters(
+                config.sweep.groups, point.group_path
+            )
         except ValueError as exc:
-            raise ValueError(f"Unable to match group_path for filtering: {exc}") from exc
+            raise ValueError(
+                f"Unable to match group_path for filtering: {exc}"
+            ) from exc
 
         filter_exprs = [sweep_filter_expr, *group_filters]
 
@@ -476,12 +504,16 @@ def _resolve_chain(chain: list[int]) -> tuple[dict[int, JobPlan], dict[int, bool
             if is_config_group(key, config_setup.config_dir):
                 # Config group: use no prefix (regular override)
                 param_overrides.extend(
-                    param_to_cmdlines(key, value, prefix="", config_dir=config_setup.config_dir)
+                    param_to_cmdlines(
+                        key, value, prefix="", config_dir=config_setup.config_dir
+                    )
                 )
             else:
                 # Regular parameter: use ++ prefix (force-add)
                 param_overrides.extend(
-                    param_to_cmdlines(key, value, prefix="++", config_dir=config_setup.config_dir)
+                    param_to_cmdlines(
+                        key, value, prefix="++", config_dir=config_setup.config_dir
+                    )
                 )
 
         compose_overrides = (
@@ -566,8 +598,10 @@ def resolve_sweep_with_dag(
     resolved_jobs = {}
     filtered_jobs = {}
     base_context = asdict(config)
-    base_context = {k: v for k, v in base_context.items() if k not in ("sweep", "sibling")}
-    sweep_filter_expr = config.sweep.filter if isinstance(config.sweep, SweepConfig) else True
+    base_context = {
+        k: v for k, v in base_context.items() if k not in ("sweep", "sibling")
+    }
+    sweep_filter_expr = config.sweep.filter if config.sweep else True
 
     if not isinstance(config.sweep, SweepConfig):
         point = points_dict[list(points_dict)[0]]

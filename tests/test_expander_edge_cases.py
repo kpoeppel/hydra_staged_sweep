@@ -14,7 +14,12 @@ def test_expand_nested_groups_complex():
     # Test nested groups without 'params' or 'configs' but with 'groups'
     config = SweepConfig(
         type="list",
-        groups=[{"type": "product", "groups": [{"params": {"a": [1]}}, {"params": {"b": [2]}}]}],
+        groups=[
+            {
+                "type": "product",
+                "groups": [{"params": {"a": [1]}}, {"params": {"b": [2]}}],
+            }
+        ],
     )
     points = expand_sweep(config)
     assert len(points) == 1
@@ -24,7 +29,9 @@ def test_expand_nested_groups_complex():
 
 def test_expand_group_error():
     config = SweepConfig(type="list", groups=[{"invalid": "key"}])
-    with pytest.raises(ValueError, match="Group must have 'groups', 'params', or 'configs'"):
+    with pytest.raises(
+        ValueError, match="Group must have 'groups', 'params', or 'configs'"
+    ):
         expand_sweep(config)
 
 

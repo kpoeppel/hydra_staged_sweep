@@ -30,14 +30,3 @@ where = ["src"]
 testpaths = ["tests"]
 addopts = "--cov=hydra_staged_sweep --cov-report=term-missing"
 pythonpath = ["src"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-
-[tool.ruff.lint]
-ignore = ["E203"]
-
-[tool.docformatter]
-wrap-summaries = 88
-wrap-descriptions = 88

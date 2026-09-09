@@ -85,7 +85,10 @@ def test_load_hydra_config_with_interpolation_override(tmp_path):
     (config_dir / "base.yaml").write_text("stage: ${oc.env:STAGE,unknown}")
 
     res = load_hydra_config(
-        "base", config_dir, overrides=["stage=${oc.env:STAGE,val}"], config_class=MockConfig
+        "base",
+        config_dir,
+        overrides=["stage=${oc.env:STAGE,val}"],
+        config_class=MockConfig,
     )
     assert res.stage == "val"
 
@@ -113,7 +116,10 @@ def test_load_hydra_config_multiple_defaults_merge(tmp_path):
         setup: dict[str, Any] = field(default_factory=dict)
 
     res = load_hydra_config(
-        "base", config_dir, overrides=["setup=[setup1,setup2]"], config_class=DefaultsConfig
+        "base",
+        config_dir,
+        overrides=["setup=[setup1,setup2]"],
+        config_class=DefaultsConfig,
     )
     assert res.setup["mode"] == "second"
     assert res.setup["alpha"] == 1
@@ -139,7 +145,9 @@ def test_load_config_reference_not_mapping(tmp_path):
     from hydra.errors import ConfigCompositionException
 
     with pytest.raises((ConfigLoaderError, ConfigCompositionException)):
-        load_config_reference(config_path=config_path, config_dir=tmp_path, overrides=["++a=b"])
+        load_config_reference(
+            config_path=config_path, config_dir=tmp_path, overrides=["++a=b"]
+        )
 
 
 def test_load_hydra_config_not_mapping_error(tmp_path):
@@ -165,7 +173,9 @@ def test_load_config_reference_not_mapping_v2(tmp_path):
     with patch("hydra.compose") as mock_compose:
         mock_compose.return_value = MagicMock()
         with patch("omegaconf.OmegaConf.to_container", return_value=[1, 2]):
-            with pytest.raises(ConfigLoaderError, match="Config file .* did not produce a mapping"):
+            with pytest.raises(
+                ConfigLoaderError, match="Config file .* did not produce a mapping"
+            ):
                 load_config_reference(
                     config_path=config_path, config_dir=tmp_path, overrides=["++a=b"]
                 )

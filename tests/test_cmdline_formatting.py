@@ -47,7 +47,8 @@ def test_param_to_cmdlines_list_with_interpolations():
 
 
 def test_param_to_cmdlines_dict():
-    """Test formatting a dict parameter (falls through to config_to_cmdline)."""
+    """Test formatting a dict parameter (falls through to
+    config_to_cmdline)."""
     result = param_to_cmdlines("nested", {"a": 1, "b": 2}, prefix="++")
     # Should expand into nested key=value pairs
     assert "++nested.a=1" in result

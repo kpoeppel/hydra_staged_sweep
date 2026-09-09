@@ -167,7 +167,10 @@ def oc_keymap_template(key: str, templ: str, inps: list[str]) -> list[DictConfig
 def oc_kvmap_template(templ: str, inps: dict[str, str]):
     OmegaConf.resolve(inps)
     return ListConfig(
-        [templ.replace("%k", str(key)).replace("%v", str(val)) for key, val in inps.items()]
+        [
+            templ.replace("%k", str(key)).replace("%v", str(val))
+            for key, val in inps.items()
+        ]
     )
 
 
@@ -181,10 +184,14 @@ def oc_map_extract_key(key: str, inps: dict[str, str]):
     return ListConfig([d[key] for d in inps])
 
 
-def oc_map_cond_template(cond: str, tmpl_if: str, tmpl_else: str, inps: list[str]) -> list[str]:
+def oc_map_cond_template(
+    cond: str, tmpl_if: str, tmpl_else: str, inps: list[str]
+) -> list[str]:
     return ListConfig(
         [
-            tmpl_if.replace("%", inp) if re.match(cond, inp) else tmpl_else.replace("%", inp)
+            tmpl_if.replace("%", inp)
+            if re.match(cond, inp)
+            else tmpl_else.replace("%", inp)
             for inp in inps
         ]
     )
@@ -389,7 +396,9 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.concat", _concat, replace=True)
     OmegaConf.register_new_resolver("oc.int", _int_cast, replace=True, use_cache=False)
     OmegaConf.register_new_resolver("oc.dict_merge", _dict_merge, replace=True)
-    OmegaConf.register_new_resolver("oc.timestring", lambda: _timestring(), replace=True)
+    OmegaConf.register_new_resolver(
+        "oc.timestring", lambda: _timestring(), replace=True
+    )
     OmegaConf.register_new_resolver("oc.len", len, replace=True)
     OmegaConf.register_new_resolver("oc.eval", _safe_eval, replace=True)  # noqa: S307
     # use_cache=False: the whole point is to re-read the referenced keys, which
@@ -409,8 +418,12 @@ def register_default_resolvers(force: bool = False) -> None:
     OmegaConf.register_new_resolver("oc.mapkeytmpl", oc_keymap_template, replace=True)
     OmegaConf.register_new_resolver("oc.mapkeyvaltmpl", oc_kvmap_template, replace=True)
     OmegaConf.register_new_resolver("oc.mapvaltmpl", oc_valuemap_template, replace=True)
-    OmegaConf.register_new_resolver("oc.mapextractkey", oc_map_extract_key, replace=True)
-    OmegaConf.register_new_resolver("oc.mapcondtmpl", oc_map_cond_template, replace=True)
+    OmegaConf.register_new_resolver(
+        "oc.mapextractkey", oc_map_extract_key, replace=True
+    )
+    OmegaConf.register_new_resolver(
+        "oc.mapcondtmpl", oc_map_cond_template, replace=True
+    )
     OmegaConf.register_new_resolver("oc.mapeval", oc_map_eval, replace=True)
     OmegaConf.register_new_resolver("oc.slurmtime", oc_slurmtime, replace=True)
     OmegaConf.register_new_resolver(
