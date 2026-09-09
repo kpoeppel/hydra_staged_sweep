@@ -5,11 +5,10 @@ from dataclasses import dataclass, field
 from typing import Any
 import pytest
 
-from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup, SweepConfig
+from hydra_staged_sweep.config.schema import SweepConfig
 from hydra_staged_sweep.config.loader import load_hydra_config
 from hydra_staged_sweep.expander import expand_sweep
-from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
-from compoconf import ConfigInterface, NonStrictDataclass
+from compoconf import NonStrictDataclass
 
 
 @dataclass(init=False)
@@ -52,7 +51,7 @@ def test_basic_config_expansion():
     # Group 1 is "list" mode with 2 configs
     # Group 2 is "product" mode with 2 values for basic
     # Result: 2 * 2 = 4 points
-    print(f"\n=== Expansion Results ===")
+    print("\n=== Expansion Results ===")
     print(f"Total points: {len(points)}")
 
     for i, point in enumerate(points):

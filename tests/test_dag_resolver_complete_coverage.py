@@ -4,12 +4,10 @@ import pytest
 from hydra_staged_sweep.dag_resolver import (
     find_sibling_by_group_path,
     build_dependency_dag_from_points,
-    resolve_sweep_with_dag,
     _resolve_filter_from_context,
     _collect_group_filters,
 )
 from hydra_staged_sweep.expander import SweepPoint
-from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
 
 
 def test_find_sibling_no_sibling_patterns():
@@ -36,7 +34,8 @@ def test_find_sibling_no_sibling_patterns():
 
 
 def test_find_sibling_multiple_matches():
-    """Test find_sibling_by_group_path when multiple siblings match (triggers warning)."""
+    """Test find_sibling_by_group_path when multiple siblings match (triggers
+    warning)."""
     # Create points where multiple siblings match the same pattern
     p0 = SweepPoint(
         index=0,
@@ -166,7 +165,9 @@ def test_collect_group_filters_nested_configs():
 
 
 def test_collect_group_filters_nested_groups():
-    groups = [{"type": "product", "groups": [{"type": "product", "params": {"a": [1]}, "filter": "f2"}]}]
+    groups = [
+        {"type": "product", "groups": [{"type": "product", "params": {"a": [1]}, "filter": "f2"}]}
+    ]
     assert _collect_group_filters(groups, (0, 0, 0)) == ["f2"]
 
 

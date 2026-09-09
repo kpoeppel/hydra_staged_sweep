@@ -1,6 +1,5 @@
 """Tests for command-line formatting functions in dag_resolver."""
 
-import pytest
 from hydra_staged_sweep.dag_resolver import param_to_cmdlines, config_to_cmdline
 
 

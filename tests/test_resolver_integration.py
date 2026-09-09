@@ -27,8 +27,12 @@ def test_resolve_simple_sweep(tmp_path):
     config.sweep = SweepConfig()
 
     points = [
-        SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,)),
-        SweepPoint(index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)),
+        SweepPoint(
+            index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,)
+        ),
+        SweepPoint(
+            index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)
+        ),
     ]
 
     config_path = tmp_path / "test.yaml"
@@ -55,8 +59,12 @@ def test_resolve_sweep_filter_skips_points(tmp_path):
     register_default_resolvers(force=True)
 
     points = [
-        SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,)),
-        SweepPoint(index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)),
+        SweepPoint(
+            index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,)
+        ),
+        SweepPoint(
+            index=1, parameters={"some_param": "val2"}, group_path=(1,), stage_path=(False,)
+        ),
     ]
 
     config_path = tmp_path / "test.yaml"
@@ -75,7 +83,9 @@ def test_resolve_sweep_filter_non_bool_raises(tmp_path):
     config = MyRootConfig()
     config.sweep = SweepConfig(filter="not-bool")
 
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
+    points = [
+        SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))
+    ]
 
     config_path = tmp_path / "test.yaml"
     with open(str(config_path), "w") as fp:
@@ -91,7 +101,9 @@ def test_resolve_sweep_filter_resolution_error(tmp_path):
     config = MyRootConfig()
     config.sweep = SweepConfig(filter="\\${missing:1}")
 
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
+    points = [
+        SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))
+    ]
     config_path = tmp_path / "test.yaml"
     with open(str(config_path), "w") as fp:
         yaml.dump(asdict(config), fp)
@@ -108,7 +120,11 @@ def test_resolve_sweep_group_path_mismatch_raises():
         type="product",
         groups=[{"type": "product", "params": {"some_param": ["val1"]}}],
     )
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(1, 0), stage_path=(False,))]
+    points = [
+        SweepPoint(
+            index=0, parameters={"some_param": "val1"}, group_path=(1, 0), stage_path=(False,)
+        )
+    ]
     setup = ConfigSetup(pwd="/tmp", config_name="conf", config_dir="/tmp")
 
     with pytest.raises(ValueError, match="Unable to match group_path"):
@@ -164,7 +180,9 @@ def test_resolve_sweep_filter_by_sibling(tmp_path):
 
 
 def test_resolve_sweep_filter_unresolved_then_false(tmp_path):
-    points = [SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))]
+    points = [
+        SweepPoint(index=0, parameters={"some_param": "val1"}, group_path=(0,), stage_path=(False,))
+    ]
     config = MyRootConfig()
     config.sweep = SweepConfig(
         filter=False,

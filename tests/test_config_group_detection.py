@@ -2,9 +2,7 @@
 
 from pathlib import Path
 import tempfile
-import shutil
 
-import pytest
 
 from hydra_staged_sweep.dag_resolver import is_config_group, param_to_cmdlines
 
@@ -88,7 +86,8 @@ def test_param_to_cmdlines_empty_string():
 
 
 def test_param_to_cmdlines_with_config_dir():
-    """Test that config_dir parameter is accepted (even if not used in current logic)."""
+    """Test that config_dir parameter is accepted (even if not used in current
+    logic)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         result = param_to_cmdlines("key", "value", prefix="++", config_dir=tmpdir)
         assert result == ['++key="value"']
@@ -167,7 +166,6 @@ def test_is_config_group_path_object():
 def test_param_to_cmdlines_dict_value():
     """Test that dict values are passed to config_to_cmdline."""
     # Dict values should be handled by config_to_cmdline
-    from hydra_staged_sweep.dag_resolver import config_to_cmdline
 
     result = param_to_cmdlines("nested", {"a": 1, "b": 2}, prefix="++")
 

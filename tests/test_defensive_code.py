@@ -1,8 +1,8 @@
 """Tests for defensive code branches in expander.py.
 
-Some code branches exist as defensive programming to handle edge cases
-that shouldn't occur with the current implementation but provide safety
-if the code logic changes in the future.
+Some code branches exist as defensive programming to handle edge cases that shouldn't
+occur with the current implementation but provide safety if the code logic changes in
+the future.
 """
 
 from hydra_staged_sweep.expander import _cartesian_product_groups
@@ -40,7 +40,8 @@ def test_list_composition_always_initializes_as_list():
 
 
 def test_list_composition_initialization_order():
-    """Verify that list_composition handles initialization correctly regardless of order."""
+    """Verify that list_composition handles initialization correctly regardless of
+    order."""
     # Even if the first group doesn't have the list_composition key,
     # it should work when subsequent groups add it
 

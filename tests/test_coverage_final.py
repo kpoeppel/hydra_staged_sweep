@@ -6,14 +6,12 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import patch, MagicMock
 from compoconf import ConfigInterface
 from hydra_staged_sweep.config.loader import (
     load_config,
     load_config_reference,
-    ConfigLoaderError,
 )
-from hydra_staged_sweep.config.schema import StagedSweepRoot, SweepConfig
+from hydra_staged_sweep.config.schema import StagedSweepRoot
 from hydra_staged_sweep.dag_resolver import (
     find_sibling_by_group_path,
 )
@@ -65,7 +63,8 @@ def test_parse_config_exception():
 
         # Test in load_config_reference (lines 265-266)
         with pytest.raises(
-            ValueError, match=r"Undefined keys {'other_field'} and unset keys {'required_field'} in data"
+            ValueError,
+            match=r"Undefined keys {'other_field'} and unset keys {'required_field'} in data",
         ):
             load_config_reference(
                 config_path=str(config_path),

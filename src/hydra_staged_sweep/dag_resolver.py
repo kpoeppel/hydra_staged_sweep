@@ -63,8 +63,7 @@ def extract_sibling_patterns(parameters: dict[str, Any]) -> set[str]:
 
 
 def _match_key(point: SweepPoint, stage_mask: tuple[bool, ...]) -> tuple[int, ...]:
-    """Build a matching key that ignores globally stage-flagged path
-    segments."""
+    """Build a matching key that ignores globally stage-flagged path segments."""
     return tuple(
         group_idx
         for group_idx, is_stage in zip_longest(point.group_path, stage_mask, fillvalue=False)
@@ -140,7 +139,7 @@ def _collect_group_filters(
     cursor = 0
 
     def walk(group_list: list[dict[str, Any]]) -> None:
-        nonlocal cursor, filters  # noqa: F824
+        nonlocal cursor, filters
         for group_idx, group in enumerate(group_list):
             if cursor >= len(group_path):
                 raise ValueError("Group path does not match sweep groups.")
@@ -293,8 +292,7 @@ def config_to_cmdline(
 
 
 def drop_cmdline_invisible(value: Any) -> Any:
-    """Strip what ``config_to_cmdline`` cannot express, so a direct merge
-    matches it.
+    """Strip what ``config_to_cmdline`` cannot express, so a direct merge matches it.
 
     An empty mapping flattens to zero overrides, so round-tripping a config
     through the command line silently drops it -- and a list element that is an
@@ -381,8 +379,8 @@ def param_to_cmdlines(key: str, val: Any, prefix: str = "", config_dir: str | Pa
 class _LazyFilterContext:
     """Build the filter context only when a filter actually reads it.
 
-    Flattening a resolved config is not cheap, and a filter that is
-    already a bool never looks at the context.
+    Flattening a resolved config is not cheap, and a filter that is already a bool never
+    looks at the context.
     """
 
     def __init__(self, resolved: Any) -> None:

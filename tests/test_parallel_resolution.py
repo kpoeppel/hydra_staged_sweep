@@ -1,5 +1,4 @@
-"""Resolving a sweep across a process pool must match resolving it in-
-process."""
+"""Resolving a sweep across a process pool must match resolving it in- process."""
 
 import os
 import textwrap
@@ -116,8 +115,7 @@ def test_sibling_references_survive_the_pool(sweep_dir):
 
 @needs_pool
 def test_plans_survive_the_pickle_round_trip(sweep_dir):
-    """Plans cross the process boundary by pickle, so they have to survive
-    it."""
+    """Plans cross the process boundary by pickle, so they have to survive it."""
     import pickle
 
     jobs = _resolve(sweep_dir, 1)
@@ -178,11 +176,10 @@ def test_worker_count_rejects_a_negative_request():
 def test_pool_is_declined_when_configs_cannot_be_pickled(monkeypatch):
     """Correct and slow beats fast and malformed.
 
-    These packages are routinely used straight off PYTHONPATH, where the
-    compoconf floor in pyproject is never enforced. On an older compoconf a
-    worker's plans come back with nested configs flattened to plain dicts, which
-    surfaces far from here as an AttributeError -- so the pool is declined
-    instead.
+    These packages are routinely used straight off PYTHONPATH, where the compoconf floor
+    in pyproject is never enforced. On an older compoconf a worker's plans come back
+    with nested configs flattened to plain dicts, which surfaces far from here as an
+    AttributeError -- so the pool is declined instead.
     """
     import hydra_staged_sweep.parallel as parallel
 

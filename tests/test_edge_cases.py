@@ -4,11 +4,10 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 
 from hydra_staged_sweep.expander import expand_sweep, SweepPoint
 from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
-from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup, SweepConfig
+from hydra_staged_sweep.config.schema import ConfigSetup, SweepConfig
 from hydra_staged_sweep.config.loader import load_hydra_config
 from compoconf import NonStrictDataclass
 
@@ -25,6 +24,7 @@ def test_expand_sweep_with_none_config():
 @dataclass(init=False)
 class EdgeCaseTestConfig(NonStrictDataclass):
     """Test config for edge cases."""
+
     sweep: SweepConfig = field(default_factory=SweepConfig)
     stage: str = ""
     index: int | tuple[int] = 0

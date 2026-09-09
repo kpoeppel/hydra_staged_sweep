@@ -112,7 +112,9 @@ def _expand_group(
         List of (parameters, group_path, stage_path) tuples
     """
     if not groups:
-        return [(dict(base_values), group_path + (0,), stage_path + ("stage" in list(base_values),))]
+        return [
+            (dict(base_values), group_path + (0,), stage_path + ("stage" in list(base_values),))
+        ]
 
     all_combinations: list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]] = []
 
@@ -236,8 +238,8 @@ def _cartesian_product_groups(
 ) -> list[tuple[dict[str, Any], tuple[int, ...], tuple[bool, ...]]]:
     """Compute cartesian product of parameter groups.
 
-    Merges parameters from each group and combines group paths.
-    For parameters in list_composition, accumulates values into lists instead of overriding.
+    Merges parameters from each group and combines group paths. For parameters in
+    list_composition, accumulates values into lists instead of overriding.
     """
     if not groups:
         return []

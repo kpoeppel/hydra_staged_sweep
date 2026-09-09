@@ -4,7 +4,9 @@ from hydra_staged_sweep.expander import expand_sweep
 
 def test_composable_product_group():
     config = SweepConfig(
-        type="product", groups=[{"params": {"a": [1, 2]}}, {"params": {"b": [3, 4]}}], base_values={"base": 0}
+        type="product",
+        groups=[{"params": {"a": [1, 2]}}, {"params": {"b": [3, 4]}}],
+        base_values={"base": 0},
     )
     points = expand_sweep(config)
     assert len(points) == 4  # 2 * 2
@@ -67,7 +69,9 @@ def test_group_defaults():
 
 
 def test_composable_list_configs():
-    config = SweepConfig(type="list", groups=[{"configs": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}], base_values={})
+    config = SweepConfig(
+        type="list", groups=[{"configs": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}], base_values={}
+    )
     points = expand_sweep(config)
     assert len(points) == 2
     assert points[0].parameters["a"] == 1
@@ -211,7 +215,10 @@ def test_list_composition_nested_groups():
         type="product",
         groups=[
             {"params": {"subconfig": ["a"]}},
-            {"type": "product", "groups": [{"params": {"subconfig": ["b"]}}, {"params": {"subconfig": ["c"]}}]},
+            {
+                "type": "product",
+                "groups": [{"params": {"subconfig": ["b"]}}, {"params": {"subconfig": ["c"]}}],
+            },
         ],
         list_composition=["subconfig"],
     )
@@ -269,10 +276,9 @@ def test_no_sweep_yields_a_single_point():
 def test_plain_dict_sweep_yields_a_single_point():
     """A config whose `sweep` key survived as a plain mapping.
 
-    Hydra hands back a dict for a `sweep:` block that never went through the
-    SweepConfig schema (an empty block, or one from a root config that does not
-    declare the field). Treated as "no sweep" rather than crashing on the
-    attribute access that follows.
+    Hydra hands back a dict for a `sweep:` block that never went through the SweepConfig
+    schema (an empty block, or one from a root config that does not declare the field).
+    Treated as "no sweep" rather than crashing on the attribute access that follows.
     """
     points = expand_sweep({})
     assert len(points) == 1

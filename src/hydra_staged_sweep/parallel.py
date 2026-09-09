@@ -53,9 +53,9 @@ class _ProbeOuter(ConfigInterface):
 def configs_survive_pickling() -> bool:
     """Can a nested compoconf config round-trip through a pickle?
 
-    Checked once, by actually doing it: the failure is a property of the
-    installed compoconf, and a behaviour probe cannot disagree with reality the
-    way a version string can.
+    Checked once, by actually doing it: the failure is a property of the installed
+    compoconf, and a behaviour probe cannot disagree with reality the way a version
+    string can.
     """
     global _PICKLE_SAFE
     if _PICKLE_SAFE is not None:

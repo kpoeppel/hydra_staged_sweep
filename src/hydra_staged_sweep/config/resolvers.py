@@ -252,8 +252,7 @@ _LOOKS_LIKE_PATH = re.compile(r"^[A-Za-z_][\w]*(\[\d+\]|\.[A-Za-z_][\w]*)*$")
 
 
 def _coerce_scalar(text: str):
-    """Turn a literal token into int/float/bool/None where it obviously is
-    one."""
+    """Turn a literal token into int/float/bool/None where it obviously is one."""
     lowered = text.lower()
     if lowered in {"null", "none", "~"}:
         return None
