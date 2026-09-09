@@ -155,7 +155,11 @@ HYDRA_STAGED_SWEEP_WORKERS=8   # pin the pool size; 1 keeps everything in-proces
 
 Because plans cross a process boundary, this needs `compoconf>=0.2.2`: earlier
 releases cannot unpickle a worker's results (nested configs come back as plain
-dicts).
+dicts). The floor is declared in `pyproject.toml`, but the pool also probes for
+it at runtime and stays in-process with a warning if the installed compoconf
+cannot round-trip a nested config — which matters because this package is often
+used straight off `PYTHONPATH`, where nothing enforces the floor. The caches are
+unaffected and work on any supported compoconf.
 
 ## Testing
 
