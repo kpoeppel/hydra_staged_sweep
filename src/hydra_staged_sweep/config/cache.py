@@ -193,16 +193,30 @@ def _install_repo_cache() -> None:
         entry = _repo_cache.get(key)
         if entry is not None and entry[0] == fingerprint:
             _stats["repo_hit"] += 1
-            return copy.deepcopy(entry[1]) if entry[2] else entry[1]
+            return copy.deepcopy(entry[1])
 
         _stats["repo_miss"] += 1
         result = _orig_repo_load(self, config_path)
-        must_copy = _has_matching_schema(self, config_path)
-        _repo_cache[key] = (
-            fingerprint,
-            copy.deepcopy(result) if must_copy else result,
-            must_copy,
-        )
+        # ALWAYS keep a pristine copy and ALWAYS hand out a fresh one.
+        #
+        # Handing out the cached node itself was ~15% faster and silently
+        # wrong: a `++key=value` override is applied to the composed config,
+        # which for a leaf config still shares structure with the parsed node
+        # this returned, so the override lands IN THE CACHE. Every later
+        # composition that pulls that file in through its defaults list then
+        # reads the overridden value -- across config names and across
+        # experiments, for the life of the process.
+        #
+        # Observed as: composing `experiments/ladder` with
+        # `++aux.peak_section=X`, then composing `experiments/ladder_juwels`
+        # (which lists `ladder` in its defaults) with NO overrides at all, and
+        # getting X. Nothing warns; the second config is simply wrong.
+        #
+        # The expensive part of a miss is reading and parsing the YAML, not
+        # copying the resulting tree, so the cache keeps almost all of its
+        # value. `_has_matching_schema` is no longer consulted here -- it
+        # decided when sharing was safe, and sharing is never safe.
+        _repo_cache[key] = (fingerprint, copy.deepcopy(result), True)
         return result
 
     ConfigRepository.load_config = load_config  # type: ignore[assignment]

@@ -169,3 +169,49 @@ def test_extra_config_matches_the_override_round_trip(config_dir, fresh_cache, p
         extra_config=drop_cmdline_invisible(value),
     )
     assert via_merge.nested == via_overrides.nested
+
+
+def test_an_override_does_not_leak_into_the_cached_file(config_dir, fresh_cache):
+    """A `++key=value` override must not reach the cache.
+
+    The repository cache used to hand out the parsed node itself when no
+    structured schema matched the file. An override is applied to the COMPOSED
+    config, which for a leaf still shares structure with that node, so the
+    override landed in the cache -- and every later composition that pulled
+    the file in through its defaults list read the overridden value, across
+    config names and across experiments, for the life of the process.
+
+    Nothing warned. The second config was simply wrong.
+    """
+    first = _load(config_dir, ["++name=overridden"])
+    assert first.name == "overridden"
+
+    second = _load(config_dir, [])
+    assert second.name == "base", (
+        "an override from a previous composition survived in the cache")
+
+    # And the cached node itself must still say what the file says.
+    for _fingerprint, node, _must_copy in cache._repo_cache.values():
+        cfg = getattr(node, "config", None)
+        if cfg is not None and "name" in cfg:
+            assert cfg["name"] == "base"
+
+
+def test_an_override_does_not_leak_into_a_config_that_includes_it(
+        config_dir, fresh_cache):
+    """The case that surfaced it: two config names, one including the other.
+
+    `child.yaml` lists `config` in its defaults, so composing it reads the
+    same cached file. Overriding while composing `config` must not change what
+    `child` composes to.
+    """
+    (config_dir / "child.yaml").write_text(
+        "# @package _global_\ndefaults:\n  - config\n  - _self_\n\nlabel: child\n")
+
+    assert _load(config_dir, ["++name=overridden"]).name == "overridden"
+
+    child = load_hydra_config("child", config_dir, [],
+                              config_class=CacheTestConfig)
+    assert child.name == "base", (
+        "an override applied to `config` leaked into `child`, which only "
+        "includes it")
