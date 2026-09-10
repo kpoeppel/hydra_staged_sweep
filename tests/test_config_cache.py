@@ -175,11 +175,12 @@ def test_an_override_does_not_leak_into_the_cached_file(config_dir, fresh_cache)
     """A `++key=value` override must not reach the cache.
 
     The repository cache used to hand out the parsed node itself when no
-    structured schema matched the file. An override is applied to the COMPOSED
-    config, which for a leaf still shares structure with that node, so the
-    override landed in the cache -- and every later composition that pulled
-    the file in through its defaults list read the overridden value, across
-    config names and across experiments, for the life of the process.
+    structured schema matched the file. An override is applied to the
+    COMPOSED config, which for a leaf still shares structure with that
+    node, so the override landed in the cache -- and every later
+    composition that pulled the file in through its defaults list read
+    the overridden value, across config names and across experiments,
+    for the life of the process.
 
     Nothing warned. The second config was simply wrong.
     """
@@ -188,7 +189,8 @@ def test_an_override_does_not_leak_into_the_cached_file(config_dir, fresh_cache)
 
     second = _load(config_dir, [])
     assert second.name == "base", (
-        "an override from a previous composition survived in the cache")
+        "an override from a previous composition survived in the cache"
+    )
 
     # And the cached node itself must still say what the file says.
     for _fingerprint, node, _must_copy in cache._repo_cache.values():
@@ -198,7 +200,8 @@ def test_an_override_does_not_leak_into_the_cached_file(config_dir, fresh_cache)
 
 
 def test_an_override_does_not_leak_into_a_config_that_includes_it(
-        config_dir, fresh_cache):
+    config_dir, fresh_cache
+):
     """The case that surfaced it: two config names, one including the other.
 
     `child.yaml` lists `config` in its defaults, so composing it reads the
@@ -206,12 +209,12 @@ def test_an_override_does_not_leak_into_a_config_that_includes_it(
     `child` composes to.
     """
     (config_dir / "child.yaml").write_text(
-        "# @package _global_\ndefaults:\n  - config\n  - _self_\n\nlabel: child\n")
+        "# @package _global_\ndefaults:\n  - config\n  - _self_\n\nlabel: child\n"
+    )
 
     assert _load(config_dir, ["++name=overridden"]).name == "overridden"
 
-    child = load_hydra_config("child", config_dir, [],
-                              config_class=CacheTestConfig)
+    child = load_hydra_config("child", config_dir, [], config_class=CacheTestConfig)
     assert child.name == "base", (
-        "an override applied to `config` leaked into `child`, which only "
-        "includes it")
+        "an override applied to `config` leaked into `child`, which only includes it"
+    )
