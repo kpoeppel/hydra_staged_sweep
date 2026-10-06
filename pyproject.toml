@@ -5,14 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hydra_staged_sweep"
 version = "0.1.0"
-description = "Sweeping and staging over hydra/omegaconf"
+description = "Sweeping and staging over hydra-fast"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = [
-    "hydra-core",
-    "omegaconf",
-    "compoconf>=0.2.2",
+    # hydra-fast reimplements the composition and interpolation core of
+    # hydra-core + omegaconf. A sweep composes the same config tree once per
+    # point, which is the case those two are slowest at; see Performance in the
+    # README. Neither hydra-core nor omegaconf is needed at runtime.
+    "hydra-fast>=0.1.0",
+    # 0.3.0 compiles each annotation into a cached parser, so parse_config stops
+    # re-deriving the decision tree for every value -- the other half of what
+    # makes a per-point resolve cheap. The pool's pickle floor is lower (0.2.1,
+    # see parallel.py); this is the floor that matters for speed.
+    "compoconf>=0.3.0",
     "networkx",
 ]
 
@@ -25,6 +32,11 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Without this the marker is not installed, so the annotations are invisible to
+# a downstream mypy/pyright and every import reports missing stubs.
+hydra_staged_sweep = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

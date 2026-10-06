@@ -154,7 +154,7 @@ def test_multiple_siblings_warning_log(caplog):
 def test_build_dag_valueerror_exception():
     """Cover lines 127-128: except ValueError in build_dependency_dag."""
     from unittest.mock import patch  # noqa
-    from hydra_staged_sweep.dag_resolver import build_dependency_dag_from_points
+    from hydra_staged_sweep.dag_resolver import build_resolution_order_dag
 
     with patch(
         "hydra_staged_sweep.dag_resolver.find_sibling_by_group_path"
@@ -171,7 +171,7 @@ def test_build_dag_valueerror_exception():
         points = {0: p0}
 
         # Should catch ValueError (lines 127-128)
-        dag = build_dependency_dag_from_points(points)
+        dag = build_resolution_order_dag(points)
 
         assert dag.number_of_nodes() == 1
 

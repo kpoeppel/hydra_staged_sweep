@@ -9,11 +9,9 @@ from typing import Any, TypeVar
 from collections.abc import Iterable, Mapping
 
 from compoconf import parse_config, ConfigInterface
-from hydra import compose, initialize_config_dir
-from omegaconf import OmegaConf, open_dict
+from hydra_fast import OmegaConf, compose, initialize_config_dir, open_dict
 
 from . import schema
-from .cache import enable as enable_config_cache
 from .resolvers import register_default_resolvers
 
 LOGGER = logging.getLogger(__file__)
@@ -21,9 +19,6 @@ LOGGER = logging.getLogger(__file__)
 T = TypeVar("T", bound=ConfigInterface)
 
 register_default_resolvers()
-# Sweeps compose the same config tree once per point; without this every point
-# re-reads and re-merges the whole tree. See config/cache.py.
-enable_config_cache()
 
 
 class ConfigLoaderError(RuntimeError):
@@ -75,9 +70,9 @@ def _merge_extra_config(cfg: Any, extra_config: Mapping[str, Any] | None) -> Non
     """Force-add ``extra_config`` into the composed config, in place.
 
     Equivalent to passing the same data as ``++key.path=value`` overrides, but
-    as a single merge. Hydra parses and applies overrides one at a time, which
-    is far too slow for the few hundred entries a resolved sibling config
-    expands into.
+    as a single merge. Overrides are parsed and applied one at a time, and a
+    composed config is not memoized on them, so the few hundred entries a
+    resolved sibling config expands into are far cheaper as one merge.
     """
     if not extra_config:
         return

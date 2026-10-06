@@ -1,15 +1,68 @@
 # Hydra Staged Sweep
 
-A generic library for managing parameter sweeps and staged configurations using Hydra and OmegaConf.
+A generic library for managing parameter sweeps and staged configurations, composing
+configs with [hydra-fast](https://github.com/kpoeppel/hydra_fast).
 
 ## Features
 
 - **Parameter Sweeps**: Define grid or composable sweeps in your configuration.
 - **Staged Configuration**: Support for multi-stage experiments (for example, burn-in, stable, decay) by way of `sibling` references.
-- **DAG Resolution**: Resolve dependencies between jobs (for example, staged runs) using a DAG based on parameter matching.
-- **Pure OmegaConf**: Uses standard OmegaConf interpolations.
+- **Resolution ordering**: When one point interpolates another's config (staged runs, by way of `sibling`), resolve them in the right order using a DAG built from parameter matching. This orders *config resolution*, not job execution — see [Scope](#scope).
+- **Standard interpolation**: Plain `${...}` interpolations in the OmegaConf grammar — no custom templating.
 - **Generic**: Works with any configuration schema that implements the `StagedSweepRoot` protocol.
-- **Fast**: Composition caches and a fork pool, so a large sweep is not dominated by re-composing the same config tree once per point (see [Performance](#performance)).
+- **Fast**: hydra-fast composition and a fork pool, so a large sweep is not dominated by re-composing the same config tree once per point (see [Performance](#performance)).
+
+Neither `hydra-core` nor `omegaconf` is needed at runtime: hydra-fast reimplements
+the composition and interpolation core they provide, keeping the same config file
+syntax, interpolation grammar, override grammar and `OmegaConf`/`compose` API.
+
+## Scope
+
+This library **resolves configs**. It combines overrides, stages, product/list
+sweeps and filters, and hands back a fully resolved config per sweep point. It
+does not run anything.
+
+That boundary is deliberate, and one consequence is worth stating plainly because
+the shape of the code invites the opposite reading: the DAG in `dag_resolver.py`
+orders **resolution**, not execution. An edge means "this point's config
+interpolates a value out of that one, so that one has to be composed first". It
+implies nothing about job ordering and nothing about artifacts — a decay stage
+reads the stable stage's resolved `base_output_dir` *string*, which needs only
+that the stable config was composed, not that it ran or produced a checkpoint.
+Points joined by an edge are frequently independent at execution time.
+
+So do not turn those edges into job dependencies. Emitting a Slurm
+`--dependency=afterok:` chain from them would serialise a sweep that can run flat
+out. Real execution dependencies — artifacts, retries, resume, scheduling — belong
+to the workflow layer integrating this library.
+
+Two things follow for integrators:
+
+- **Job identity is yours.** `index` is a point's position in the expansion, not a
+  durable name: add a value to a sweep axis and everything after it renumbers
+  (`group_path` shifts too, since it embeds a cartesian-product offset). If you
+  need a key that survives edits to the sweep definition, derive it.
+- **Distinctness is yours.** Nothing checks that two points resolve to different
+  output paths. A sweep whose `base_output_dir` omits one of its axes will happily
+  produce N configs that all write to the same directory.
+
+## Install
+
+```bash
+pip install -e ".[dev]"
+```
+
+`compoconf>=0.3.0` resolves from PyPI. `hydra-fast>=0.1.0` is declared the same
+way, but **is not published yet**, so install it from git first:
+
+```bash
+pip install git+https://github.com/kpoeppel/hydra_fast.git
+pip install -e ".[dev]"
+```
+
+The second step then finds the constraint already satisfied and does not reach
+for PyPI. The same applies to CI, which runs `pip install -e ".[dev]"` directly
+and needs that first line (or a published release) to go green.
 
 ## Usage
 
@@ -92,7 +145,7 @@ root_config = load_config(config_path, config_class=MyRootConfig)
 # Expand the sweep
 points = expand_sweep(root_config.sweep)
 
-# Resolve dependencies (DAG)
+# Resolve every point's config, siblings first where one references another
 setup = ConfigSetup(
     pwd=".",
     config_path=config_path,
@@ -116,50 +169,66 @@ for plan in plans:
 
 ## Performance
 
-Building a sweep composes the same config tree once per sweep point, and Hydra
-keeps nothing between `compose()` calls: without help, every point re-reads and
-re-parses the same YAML, re-walks the same defaults list, re-merges the same
-configs and re-parses the same interpolation and override strings.
+Building a sweep composes the same config tree once per sweep point, which is
+exactly the case stock Hydra is slowest at: it keeps nothing between `compose()`
+calls, so every point re-reads and re-parses the same YAML, re-walks the same
+defaults list, re-merges the same configs and re-parses the same interpolation
+and override strings.
 
-Two mechanisms remove that, both on by default and both leaving the resolved
+Three mechanisms remove that, all on by default and all leaving the resolved
 configs bit-for-bit identical:
 
-**Composition caches** (`config/cache.py`) — seven in-memory layers over Hydra
-and OmegaConf: a libyaml-backed YAML loader, parsed config files, config-group
-lookups, merged defaults lists, the Defaults List itself, interpolation parse
-trees, and override parses. Entries carry a `stat()` fingerprint and are
-revalidated on every lookup, so editing a config on disk invalidates exactly
-what depends on it. They install when `config/loader.py` is imported.
+**hydra-fast composition** — configs are composed through
+[hydra-fast](https://github.com/kpoeppel/hydra_fast) rather than
+`hydra-core` + `omegaconf`. It reads and parses each file once per process,
+compiles each distinct `${...}` string into a closure once instead of re-walking
+an ANTLR parse tree per resolution, stores configs as plain `dict`/`list` so
+merging and copying are data operations, and memoizes the defaults list and the
+merged config on what can actually change them. hydra-fast measures ~120x per
+sweep point against stock Hydra on a real production config tree, and ~25x
+against the hand-written cache layer this package used to carry (which is now
+deleted — hydra-fast subsumes it).
 
-```bash
-HYDRA_STAGED_SWEEP_CACHE=0   # turn every cache off
+Cache behaviour is hydra-fast's to control:
+
+```python
+import hydra_fast
+
+hydra_fast.set_validation("never")  # trust the first read; default is "stat"
+hydra_fast.clear_caches()
+hydra_fast.cache_stats()            # hit/miss counters per layer
 ```
 
-Staged sweeps additionally stop recomposing siblings: `resolve_sweep_with_dag`
-reuses the sibling's already-resolved config, builds the sibling context once
-per stage chain, and merges it into the composed config in one step instead of
-flattening it into several hundred `++key=value` overrides for Hydra to parse
-and apply one at a time. `JobPlan.parameters` still records those overrides, so
-a job stays reproducible from the command line.
+The default `"stat"` re-checks the files an entry depends on at every lookup, so
+a config edited mid-process invalidates exactly what depends on it. Keep it;
+hydra-fast measures no gain from `"never"` on a sweep-shaped workload.
+
+**Sibling reuse** — staged sweeps do not recompose siblings. `resolve_sweep_with_dag`
+reuses the sibling's already-resolved config, builds the sibling context once per
+stage chain, and merges it into the composed config in one step instead of
+flattening it into several hundred `++key=value` overrides to parse and apply one
+at a time. `JobPlan.parameters` still records those overrides, so a job stays
+reproducible from the command line.
 
 **Process pool** (`parallel.py`) — a sweep splits into independent dependency
 chains (a stable stage and the cooldowns branching off it must run in order, but
 separate chains share nothing), which are handed to a `fork` pool. Forking means
 workers inherit the loaded modules, the registered resolvers and the warm caches,
-so only each chain and its results cross the process boundary. The pool is
-skipped for small sweeps, where the process overhead dominates.
+so only each chain and its results cross the process boundary. Resolution is pure
+CPU, so it scales with cores until the machine saturates; rendering job scripts
+fans out the same way. The pool is skipped for small sweeps, where the process
+overhead dominates, and on platforms without `fork`.
 
 ```bash
 HYDRA_STAGED_SWEEP_WORKERS=8   # pin the pool size; 1 keeps everything in-process
 ```
 
-Because plans cross a process boundary, this needs `compoconf>=0.2.2`: earlier
-releases cannot unpickle a worker's results (nested configs come back as plain
-dicts). The floor is declared in `pyproject.toml`, but the pool also probes for
-it at runtime and stays in-process with a warning if the installed compoconf
-cannot round-trip a nested config — which matters because this package is often
-used straight off `PYTHONPATH`, where nothing enforces the floor. The caches are
-unaffected and work on any supported compoconf.
+Because plans cross a process boundary, the pool needs a compoconf that can
+unpickle a nested config (`>=0.2.1`; before that they came back as plain dicts).
+`pyproject.toml` declares a higher floor than that for other reasons, but the
+pool also probes for the capability at runtime and stays in-process with a
+warning if it is missing — which matters because this package is often used
+straight off `PYTHONPATH`, where nothing enforces the floor.
 
 ## Testing
 
@@ -168,42 +237,6 @@ Run the tests using `pytest`:
 ```bash
 PYTHONPATH=src pytest tests/
 ```
-
-## Performance
-
-Building a sweep composes the same config tree once per sweep point, and Hydra
-keeps nothing between `compose()` calls. `hydra_staged_sweep.config.cache`
-installs in-memory caches for the parts that repeat -- parsed config files,
-config-group lookups, merged defaults lists, and the ANTLR parse trees for
-interpolations and command-line overrides -- and backs OmegaConf's YAML loader
-with libyaml where available. Entries are revalidated with `stat()` on every
-lookup, so editing a config on disk invalidates exactly the entries that depend
-on it; composition results are unchanged.
-
-The caches are installed automatically when `hydra_staged_sweep.config.loader`
-is imported. Set `HYDRA_STAGED_SWEEP_CACHE=0` to turn them off, or call
-`cache.disable()`. `cache.stats()` reports hit/miss counters per layer.
-
-Staged sweeps additionally reuse each sibling's already-resolved config instead
-of recomposing it, and merge the sibling context into the composed config in one
-step rather than round-tripping it through several hundred `++key=value`
-overrides. `JobPlan.parameters` still records those overrides, so a job remains
-reproducible from the command line.
-
-### Parallel resolution
-
-A sweep splits into independent dependency chains -- a stable stage and the
-cooldowns that branch off it must be resolved in order, but separate chains
-share nothing. `resolve_sweep_with_dag` hands those chains to a `fork` pool, so
-the workers inherit the loaded modules, the registered resolvers and the warm
-caches and start doing useful work immediately. Rendering job scripts fans out
-the same way.
-
-Resolution is pure CPU, so it scales with cores until the machine saturates.
-Set `HYDRA_STAGED_SWEEP_WORKERS` to pin the pool size: unset or `0` uses one
-worker per available CPU, `1` keeps everything in-process (useful when
-profiling or debugging). Platforms without `fork` fall back to in-process
-resolution.
 
 ## Security Note
 

@@ -3,24 +3,37 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field
 from itertools import product
 from typing import Any
 from collections.abc import Mapping
 
 
-from omegaconf import OmegaConf, ListConfig, DictConfig
+from hydra_fast import OmegaConf, ListConfig, DictConfig
 
 from .config.schema import SweepConfig
 
 LOGGER = logging.getLogger(__file__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SweepPoint:
-    """Represents a single expanded sweep entry."""
+    """Represents a single expanded sweep entry.
 
-    index: int = field(default_factory=MISSING)
+    ``kw_only`` so the two required fields can be declared in either order:
+    ``index`` previously carried ``field(default_factory=MISSING)``, which reads
+    like a default but means "no default", and was the only reason a required
+    field could legally precede ``parameters`` at all.
+
+    ``index`` is this point's **position** in the expansion, nothing more. It is
+    the DAG node key and the handle that correlates a resolved config back to
+    its slot in the emitted list. It is not a durable identity: adding a value
+    to a sweep axis renumbers every point after it, and ``group_path`` embeds a
+    cartesian-product offset so it shifts too. Callers that need an identity
+    stable across sweep edits have to derive one themselves.
+    """
+
+    index: int
     parameters: Mapping[str, Any]
     group_path: tuple[int, ...] = field(default_factory=tuple)  # Track group hierarchy
     stage_path: tuple[bool, ...] = field(
@@ -34,7 +47,10 @@ def expand_sweep(config: SweepConfig) -> list[SweepPoint]:
     Supports composable groups format.
     """
     if config is None or isinstance(config, dict):
-        points = [SweepPoint(index=0, parameters=[])]
+        # An empty MAPPING, not an empty list: `parameters` is a Mapping
+        # everywhere else, and every consumer treats it as one -- a list reaches
+        # `.items()` in the resolver and raises AttributeError.
+        points = [SweepPoint(index=0, parameters={})]
         return points
     LOGGER.debug("Starting sweep expansion")
     base_values = dict(config.base_values)
@@ -58,11 +74,13 @@ def _has_stage_key(values: Mapping[str, Any], stage_str: str) -> bool:
 def _nested_has_stage_key(config_dict: Mapping[str, Any], stage_str: str) -> bool:
     for key in ("groups", "params", "configs"):
         value = config_dict.get(key)
-        if isinstance(value, Mapping) and stage_str in value:
+        # See _dict_merge in config/resolvers.py for why DictConfig is named
+        # alongside the ABC rather than relying on it.
+        if isinstance(value, (Mapping, DictConfig)) and stage_str in value:
             return True
-        if isinstance(value, list):
+        if isinstance(value, (list, ListConfig)):
             for item in value:
-                if isinstance(item, Mapping) and stage_str in item:
+                if isinstance(item, (Mapping, DictConfig)) and stage_str in item:
                     return True
     return False
 

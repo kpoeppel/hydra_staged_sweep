@@ -2,7 +2,7 @@ import pytest
 from hydra_staged_sweep.dag_resolver import (
     resolve_sweep_with_dag,
     extract_sibling_patterns,
-    build_dependency_dag_from_points,
+    build_resolution_order_dag,
     config_to_cmdline,
 )
 from hydra_staged_sweep.config.schema import StagedSweepRoot, ConfigSetup
@@ -43,7 +43,7 @@ def test_build_dag_warning(caplog):
         group_path=(0,),
         stage_path=(True,),
     )
-    build_dependency_dag_from_points({0: p})
+    build_resolution_order_dag({0: p})
     assert "No sibling found for requested stage_pattern: missing" in caplog.text
 
 
@@ -60,7 +60,7 @@ def test_sibling_match_ignores_stage_path():
     p2 = SweepPoint(
         index=2, parameters={"stage": "A"}, group_path=(1, 0), stage_path=(False, False)
     )
-    dag = build_dependency_dag_from_points({0: p0, 1: p1, 2: p2})
+    dag = build_resolution_order_dag({0: p0, 1: p1, 2: p2})
     assert (0, 1) in dag.edges()
     assert (2, 1) not in dag.edges()
 
