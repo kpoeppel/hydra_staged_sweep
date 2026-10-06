@@ -84,6 +84,6 @@ def test_write_plans_json_handles_an_empty_plan_list(tmp_path):
 def test_nested_config_values_survive_the_dump(payload, tmp_path):
     plans = [JobPlan(config=PlanTestConfig(nested=payload), parameters=[])]
     target = write_plans_json(plans, tmp_path / "n.json")
-    assert json.loads(target.read_text(encoding="utf-8"))[0]["config"][
-        "nested"
-    ] == payload
+    assert (
+        json.loads(target.read_text(encoding="utf-8"))[0]["config"]["nested"] == payload
+    )
