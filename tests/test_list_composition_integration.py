@@ -10,7 +10,7 @@ from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
 
 
 @dataclass(kw_only=True)
-class TestConfig(StagedSweepRoot):
+class PluginsConfig(StagedSweepRoot):
     """Test configuration with plugins."""
 
     plugins: list[str] | str = field(default_factory=list)
@@ -21,7 +21,7 @@ class TestConfig(StagedSweepRoot):
 def test_list_composition_end_to_end():
     """Test list composition from sweep expansion through command-line
     generation."""
-    config = TestConfig(
+    config = PluginsConfig(
         sweep=SweepConfig(
             type="product",
             groups=[
@@ -88,7 +88,7 @@ sweep:
         # Load and resolve
         from hydra_staged_sweep.config.loader import load_config
 
-        config = load_config(config_path, config_class=TestConfig)
+        config = load_config(config_path, config_class=PluginsConfig)
         points = expand_sweep(config.sweep)
 
         # Product: 2 (plugins) * 2 (model) = 4 points
@@ -96,7 +96,9 @@ sweep:
 
         # Resolve with DAG
         setup = ConfigSetup(pwd=str(tmpdir), config_path=str(config_path))
-        plans = resolve_sweep_with_dag(config, points, setup, config_class=TestConfig)
+        plans = resolve_sweep_with_dag(
+            config, points, setup, config_class=PluginsConfig
+        )
 
         assert len(plans) == 4
 
@@ -114,7 +116,7 @@ sweep:
 
 def test_list_composition_multiple_params():
     """Test list composition with multiple parameters being accumulated."""
-    config = TestConfig(
+    config = PluginsConfig(
         sweep=SweepConfig(
             type="product",
             groups=[
@@ -136,7 +138,7 @@ def test_list_composition_multiple_params():
 def test_list_composition_partial():
     """Test that only specified parameters are accumulated, others are
     overridden."""
-    config = TestConfig(
+    config = PluginsConfig(
         sweep=SweepConfig(
             type="product",
             groups=[

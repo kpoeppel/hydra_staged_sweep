@@ -1,5 +1,5 @@
 import pytest
-from omegaconf import OmegaConf
+from hydra_fast import OmegaConf
 from hydra_staged_sweep.config.resolvers import register_default_resolvers
 
 

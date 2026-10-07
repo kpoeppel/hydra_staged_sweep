@@ -282,7 +282,9 @@ def test_no_sweep_yields_a_single_point():
     points = expand_sweep(None)
     assert len(points) == 1
     assert points[0].index == 0
-    assert points[0].parameters == []
+    # A Mapping, as `parameters` is declared and as every consumer expects. This
+    # used to be an empty *list*, which raised AttributeError on `.items()`.
+    assert points[0].parameters == {}
 
 
 def test_plain_dict_sweep_yields_a_single_point():
@@ -295,4 +297,4 @@ def test_plain_dict_sweep_yields_a_single_point():
     """
     points = expand_sweep({})
     assert len(points) == 1
-    assert points[0].parameters == []
+    assert points[0].parameters == {}

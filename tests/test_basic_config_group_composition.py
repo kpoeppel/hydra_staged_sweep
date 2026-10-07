@@ -3,7 +3,6 @@
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
-import pytest
 
 from hydra_staged_sweep.config.schema import SweepConfig
 from hydra_staged_sweep.config.loader import load_hydra_config
@@ -18,7 +17,7 @@ class BasicTestConfig(NonStrictDataclass):
     # Required fields from StagedSweepRoot
     sweep: SweepConfig = field(default_factory=SweepConfig)
     stage: str = ""
-    index: int | tuple[int] = 0
+    index: int = 0
     sibling: dict[str, Any] = field(default_factory=dict)
 
 
@@ -86,14 +85,6 @@ def test_basic_config_expansion():
             assert isinstance(elem, str), (
                 f"Elements should be strings, got {type(elem)}: {elem}"
             )
-
-
-def test_basic_config_hydra_resolution():
-    """Test that Hydra resolution works when using proper overrides (without
-    ++)."""
-    pytest.skip(
-        "Will be implemented after fixing nested lists and override prefix logic"
-    )
 
 
 def test_what_command_lines_would_be_generated():

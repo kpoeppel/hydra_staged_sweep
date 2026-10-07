@@ -142,7 +142,7 @@ def test_load_config_reference_not_mapping(tmp_path):
     config_path = config_dir / "base.yaml"
     config_path.write_text("[1, 2]")
 
-    from hydra.errors import ConfigCompositionException
+    from hydra_fast import ConfigCompositionException
 
     with pytest.raises((ConfigLoaderError, ConfigCompositionException)):
         load_config_reference(
@@ -155,9 +155,12 @@ def test_load_hydra_config_not_mapping_error(tmp_path):
     config_dir.mkdir()
     (config_dir / "base.yaml").write_text("foo: bar")
 
-    with patch("hydra.compose") as mock_compose:
+    # Patch where the loader looks the names up, not where they are defined: it
+    # imports both into its own namespace, so patching the source module leaves
+    # the loader's bindings untouched and the test passes for the wrong reason.
+    with patch("hydra_staged_sweep.config.loader.compose") as mock_compose:
         mock_compose.return_value = MagicMock()
-        with patch("omegaconf.OmegaConf.to_container", return_value=[1, 2]):
+        with patch("hydra_fast.OmegaConf.to_container", return_value=[1, 2]):
             with pytest.raises(
                 ConfigLoaderError, match="Hydra config base did not produce a mapping"
             ):
@@ -170,9 +173,9 @@ def test_load_config_reference_not_mapping_v2(tmp_path):
     config_path = config_dir / "ref.yaml"
     config_path.write_text("stage: ref")
 
-    with patch("hydra.compose") as mock_compose:
+    with patch("hydra_staged_sweep.config.loader.compose") as mock_compose:
         mock_compose.return_value = MagicMock()
-        with patch("omegaconf.OmegaConf.to_container", return_value=[1, 2]):
+        with patch("hydra_fast.OmegaConf.to_container", return_value=[1, 2]):
             with pytest.raises(
                 ConfigLoaderError, match="Config file .* did not produce a mapping"
             ):

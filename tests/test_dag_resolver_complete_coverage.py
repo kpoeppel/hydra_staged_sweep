@@ -3,7 +3,7 @@
 import pytest
 from hydra_staged_sweep.dag_resolver import (
     find_sibling_by_group_path,
-    build_dependency_dag_from_points,
+    build_resolution_order_dag,
     _resolve_filter_from_context,
     _collect_group_filters,
 )
@@ -67,7 +67,7 @@ def test_find_sibling_multiple_matches():
 
 
 def test_build_dag_with_value_error():
-    """Test build_dependency_dag_from_points with ValueError handling."""
+    """Test build_resolution_order_dag with ValueError handling."""
     # Create a point that might trigger ValueError during sibling resolution
     p0 = SweepPoint(
         index=0,
@@ -79,7 +79,7 @@ def test_build_dag_with_value_error():
     points = {0: p0}
 
     # Should handle ValueError gracefully
-    dag = build_dependency_dag_from_points(points)
+    dag = build_resolution_order_dag(points)
 
     # DAG should be created even if sibling resolution fails
     assert dag.number_of_nodes() == 1

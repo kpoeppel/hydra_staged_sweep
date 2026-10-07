@@ -1,4 +1,4 @@
-"""Hydra/OmegaConf resolvers."""
+"""OmegaConf-grammar resolvers, registered against hydra-fast."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from math import sqrt as _sqrt
 from pathlib import Path
 from collections.abc import Mapping
 
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from hydra_fast import DictConfig, ListConfig, OmegaConf
 
 LOGGER = logging.getLogger(__name__)
 
@@ -134,7 +134,12 @@ def _dict_merge(*mappings):
     for mapping in mappings:
         if mapping is None:
             continue
-        if isinstance(mapping, Mapping):
+        # DictConfig explicitly, not just the ABC: an interpolated argument
+        # arrives as a config container, and hydra-fast's is not registered with
+        # collections.abc.Mapping the way omegaconf's was (its DictConfig is a
+        # view over a plain dict, deriving from Node rather than MutableMapping).
+        # Testing only the ABC silently merged nothing and returned {}.
+        if isinstance(mapping, (Mapping, DictConfig)):
             merged.update(mapping)
     return merged
 

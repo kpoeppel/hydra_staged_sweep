@@ -2,7 +2,7 @@ import networkx as nx
 from hydra_staged_sweep.dag_resolver import (
     extract_sibling_patterns,
     find_sibling_by_group_path,
-    build_dependency_dag_from_points,
+    build_resolution_order_dag,
 )
 from hydra_staged_sweep.expander import SweepPoint
 
@@ -53,7 +53,7 @@ def test_build_dependency_dag():
     )
 
     points = {0: p0, 1: p1}
-    dag = build_dependency_dag_from_points(points)
+    dag = build_resolution_order_dag(points)
 
     assert dag.has_edge(0, 1)
     assert nx.is_directed_acyclic_graph(dag)

@@ -1,12 +1,27 @@
-"""Pure OmegaConf DAG-based sweep resolution.
+"""Resolve a sweep's configs in dependency order, using plain interpolation.
 
-This is the simplified v2 implementation that uses OmegaConf for ALL interpolations,
-including sibling references. No custom template resolution - just pure OmegaConf.
+Sibling references are ordinary ``${sibling.stable.output_dir}`` interpolations:
+the resolved sibling config is added to the namespace before composing, so the
+interpolation grammar does the work and there is no custom templating.
 
-Key insight: Use `${sibling.stable.output_dir}` syntax in YAML and add sibling data
-to the OmegaConf namespace during resolution. OmegaConf handles everything.
+THE DAG HERE ORDERS RESOLUTION, NOT EXECUTION. An edge means "this point's
+config cannot be composed until that point's config has been resolved", because
+it interpolates a value out of it. It says nothing about the order the resulting
+jobs must *run* in, and nothing about artifacts: a decay stage reads the stable
+stage's resolved ``base_output_dir`` *string*, which requires only that the
+stable config was composed -- not that it ran, and not that it produced
+anything. Two points joined by an edge here may be entirely independent at
+execution time.
 
-See docs/sweep_resolution_ordering.md for design rationale (Option 5).
+So do not turn these edges into job dependencies (a Slurm
+``--dependency=afterok:`` chain, say): that would serialise a sweep that can run
+flat out. Real execution dependencies are the integrating workflow layer's
+concern and are deliberately outside this library -- it resolves configs, it
+does not model or run workloads.
+
+The DAG exists so the resolver can order sibling-dependent points within a
+chain, detect reference cycles, and split independent chains across the worker
+pool.
 """
 
 from __future__ import annotations
@@ -22,7 +37,7 @@ from typing import Any
 
 import networkx as nx
 from compoconf import asdict
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from hydra_fast import DictConfig, ListConfig, OmegaConf
 
 from .config.schema import StagedSweepRoot, SweepConfig, ConfigSetup
 from .config.loader import load_config_reference
@@ -228,12 +243,17 @@ def find_sibling_by_group_path(
     return None
 
 
-def build_dependency_dag_from_points(
+def build_resolution_order_dag(
     points: dict[int, SweepPoint],
     sibling_index: SiblingIndex | None = None,
 ) -> nx.DiGraph:
-    """Build dependency DAG from sweep points."""
-    LOGGER.debug(f"Building dependency DAG from {len(points)} points")
+    """Order the points for resolution, by who interpolates whom.
+
+    An edge ``A -> B`` means B's config reads a value out of A's, so A has to be
+    resolved first. This is **not** an execution dependency -- see the module
+    docstring before using these edges to order jobs.
+    """
+    LOGGER.debug(f"Building resolution-order DAG from {len(points)} points")
     dag = nx.DiGraph()
     index = sibling_index or _build_sibling_index(points)
 
@@ -259,7 +279,9 @@ def build_dependency_dag_from_points(
             except ValueError:
                 pass
 
-    LOGGER.info(f"Built DAG with {len(points)} nodes and {edges_added} edges")
+    LOGGER.info(
+        f"Built resolution-order DAG with {len(points)} nodes and {edges_added} edges"
+    )
     return dag
 
 
@@ -314,7 +336,10 @@ def drop_cmdline_invisible(value: Any) -> Any:
     for it. Applying the same pruning before merging keeps the two paths in
     exact agreement.
     """
-    if isinstance(value, Mapping):
+    # DictConfig is named alongside the ABC on purpose; see _dict_merge in
+    # config/resolvers.py. Missing it here would return a config container
+    # unpruned, so the merge and the command line would disagree again.
+    if isinstance(value, (Mapping, DictConfig)):
         pruned = {key: drop_cmdline_invisible(item) for key, item in value.items()}
         return {
             key: item
@@ -423,7 +448,7 @@ _CHAIN_CONTEXT: tuple | None = None
 
 
 def _resolve_chain(chain: list[int]) -> tuple[dict[int, JobPlan], dict[int, bool]]:
-    """Resolve one dependency chain, in the order given."""
+    """Resolve one chain of sibling-dependent points, in the order given."""
     assert _CHAIN_CONTEXT is not None, "chain context not initialised"
     (
         config,
@@ -586,7 +611,7 @@ def resolve_sweep_with_dag(
         points_dict = points
 
     sibling_index = _build_sibling_index(points_dict)
-    dag = build_dependency_dag_from_points(points_dict, sibling_index=sibling_index)
+    dag = build_resolution_order_dag(points_dict, sibling_index=sibling_index)
 
     if not nx.is_directed_acyclic_graph(dag):
         cycles = list(nx.simple_cycles(dag))
@@ -655,9 +680,15 @@ def resolve_sweep_with_dag(
     ]
 
 
+#: Deprecated alias. The old name said "dependency", which read as an execution
+#: dependency and is what this DAG is NOT -- see the module docstring. Kept so an
+#: integrator importing the old name does not break on upgrade.
+build_dependency_dag_from_points = build_resolution_order_dag
+
 __all__ = [
     "extract_sibling_patterns",
     "find_sibling_by_group_path",
+    "build_resolution_order_dag",
     "build_dependency_dag_from_points",
     "resolve_sweep_with_dag",
 ]

@@ -3,6 +3,7 @@ from hydra_staged_sweep.config.schema import ConfigSetup, SweepConfig
 from hydra_staged_sweep.config.loader import load_config_reference
 from hydra_staged_sweep.expander import expand_sweep
 from hydra_staged_sweep.dag_resolver import resolve_sweep_with_dag
+from hydra_staged_sweep.planner import write_plans_json
 from argparse import ArgumentParser
 from compoconf import NonStrictDataclass, asdict
 from dataclasses import dataclass
@@ -17,6 +18,12 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("--config-name", type=str)
     parser.add_argument("--config-dir", type=str)
+    parser.add_argument(
+        "--sweep-json",
+        type=str,
+        default=None,
+        help="write the resolved plans here (honoured when sweep.store_sweep_json)",
+    )
     parser.add_argument("overrides", nargs="*", default=[])
     pwd = os.path.abspath(os.curdir)
     args = parser.parse_args()
@@ -43,6 +50,10 @@ def main():
     # print(plans)
     for plan in plans:
         print({key: val for key, val in asdict(plan.config).items() if key != "sweep"})
+
+    sweep = root_config.sweep
+    if args.sweep_json and getattr(sweep, "store_sweep_json", False):
+        write_plans_json(plans, args.sweep_json)
 
 
 if __name__ == "__main__":

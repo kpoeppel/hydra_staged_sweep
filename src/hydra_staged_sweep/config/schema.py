@@ -22,6 +22,10 @@ class SweepConfig(ConfigInterface):
     type: Literal["product", "list"] | None = None  # "product" or "list"
     groups: list[dict[str, Any]] | None = None
     base_values: dict[str, Any] = field(default_factory=dict)
+    #: Asks the caller to persist the resolved plan; see
+    #: ``hydra_staged_sweep.write_plans_json``. Resolution does no I/O of its
+    #: own, so this is a request to the integrator, not something the resolver
+    #: acts on.
     store_sweep_json: bool = True
     filter: bool | str | None = True
     list_composition: list[str] = field(
@@ -39,8 +43,14 @@ class StagedSweepRoot(ConfigInterface):
 
     sweep: SweepConfig = field(default_factory=SweepConfig)
     stage: str = ""
-    # These are set internally during resolution
-    index: int | tuple[int] = 0
+    # These are set internally during resolution.
+    #
+    # `index` is the point's POSITION in the expansion, injected as `++index=`.
+    # Available for log paths and for correlating a config back to its slot in
+    # the emitted list -- but it is not a stable identity: adding a value to a
+    # sweep axis renumbers everything after it. Derive your own key if you need
+    # one that survives edits to the sweep definition.
+    index: int = 0
     sibling: dict[str, Any] = field(default_factory=dict)
 
 

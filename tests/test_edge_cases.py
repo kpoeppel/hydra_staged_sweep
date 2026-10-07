@@ -18,7 +18,7 @@ def test_expand_sweep_with_none_config():
 
     assert len(points) == 1
     assert points[0].index == 0
-    assert points[0].parameters == []
+    assert points[0].parameters == {}
 
 
 @dataclass(init=False)
@@ -27,7 +27,7 @@ class EdgeCaseTestConfig(NonStrictDataclass):
 
     sweep: SweepConfig = field(default_factory=SweepConfig)
     stage: str = ""
-    index: int | tuple[int] = 0
+    index: int = 0
     sibling: dict[str, Any] = field(default_factory=dict)
 
 
